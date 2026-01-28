@@ -1,0 +1,18 @@
+diff --git a/code/test/abs.c b/code/test/abs.c
+new file mode 100644
+index 0000000..440e088
+--- /dev/null
++++ b/code/test/abs.c
+@@ -0,0 +1,9 @@
++#include <syscall.h>
++
++int main(){
++	int x=-101;
++	int y;
++	y=Abs(x);
++	PrintNum(y);
++	return 0;
++}
+diff --git a/code/userprog/ksyscall b/code/userprog/ksyscall
+new file mode 100644
+index 0000000..e69de29
