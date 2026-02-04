@@ -8,10 +8,10 @@
 #include "syscall.h"
 
 int main() {
-    int result;
+   	int i;
+	for(i=0; i<1000; i++) PrintString("child process\n");
 
-    result = Add(42, 23);
+	Exit(0);
 
-    Halt();
     /* not reached */
 }

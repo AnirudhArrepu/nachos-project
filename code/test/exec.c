@@ -7,11 +7,14 @@
 #define stdout 1
 
 int main() {
-    int pid;
-    pid = Exec("num_io");
+    int pid, i;
+    pid = Exec("../test/add");
     if (pid < 0) {
         Write("Exec failed: ", 14, stdout);
         PrintNum(pid);
-    } else
+    } else{
+	for(i=0; i<1000; i++) PrintString("parent process\n");
+	
+    }
         Join(pid);
 }
