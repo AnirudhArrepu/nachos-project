@@ -29,8 +29,14 @@
 //	Initially, no ready threads.
 //----------------------------------------------------------------------
 
+int compare(Thread* x, Thread* y){
+	if(x->priority > y->priority) return 1;
+	else if(x->priority < y->priority) return -1;
+	else return 0;
+}
+
 Scheduler::Scheduler() {
-    readyList = new List<Thread *>;
+    readyList = new SortedList<Thread *>(&compare);
     toBeDestroyed = NULL;
 }
 
@@ -55,6 +61,7 @@ void Scheduler::ReadyToRun(Thread *thread) {
 
     thread->setStatus(READY);
     readyList->Append(thread);
+//    kernel->currentThread->Yield();
 }
 
 //----------------------------------------------------------------------

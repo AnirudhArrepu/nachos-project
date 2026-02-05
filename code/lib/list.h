@@ -107,7 +107,7 @@ class SortedList : public List<T> {
     void Prepend(T item) {
         Insert(item);
     }                                      // *pre*pending has no meaning
-                                           //	in a sorted list
+   public:                                       //	in a sorted list
     void Append(T item) { Insert(item); }  // neither does *ap*pend
 };
 

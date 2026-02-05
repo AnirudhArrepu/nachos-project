@@ -70,7 +70,7 @@ int PCB::Exec(char* filename, int id) {
     // nên khi hàm này kết thúc thì giá trị của biến này cũng bị xóa
     // Đừng hỏi tôi đã mất bao lâu để nhận ra điều này :)
     this->thread->Fork(StartProcess_2, &this->thread->processID);
-
+	kernel->currentThread->Yield();
     multex->V();
     // Trả về id.
     return id;

@@ -21,6 +21,7 @@
 #include "switch.h"
 #include "synch.h"
 #include "sysdep.h"
+#include <stdlib.h>
 
 // this is put at the top of the execution stack, for detecting stack overflows
 const int STACK_FENCEPOST = 0xdedbeef;
@@ -45,6 +46,8 @@ Thread::Thread(char *threadName, bool _has_dynamic_name /*=false*/) {
                                  // of machine registers
     }
     space = NULL;
+    priority= rand()%10;
+    printf("priority: %d, name: %s \n", priority, name);
 }
 
 //----------------------------------------------------------------------
@@ -143,7 +146,6 @@ void Thread::CheckOverflow() {
 void Thread::Begin() {
     ASSERT(this == kernel->currentThread);
     DEBUG(dbgThread, "Beginning thread: " << name);
-
     kernel->scheduler->CheckToBeDestroyed();
     kernel->interrupt->Enable();
 }

@@ -9,7 +9,7 @@
 
 int main() {
    	int i;
-	for(i=0; i<1000; i++) PrintString("child process\n");
+	for(i=0; i<10; i++) PrintString("child process\n");
 
 	Exit(0);
 
