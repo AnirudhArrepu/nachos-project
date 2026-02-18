@@ -74,11 +74,21 @@ void Scheduler::ReadyToRun(Thread *thread) {
 
 Thread *Scheduler::FindNextToRun() {
     ASSERT(kernel->interrupt->getLevel() == IntOff);
-
+    List<Thread*>* tmp_list = new List<Thread*>();
     if (readyList->IsEmpty()) {
         return NULL;
     } else {
-        return readyList->RemoveFront();
+        Thread* tmp= readyList->RemoveFront();
+
+	while(tmp->timeToBeActive>time(NULL) && !readyList->IsEmpty()){
+		tmp_list->Append(tmp);
+		tmp=readyList->RemoveFront();
+	}
+	if(tmp->timeToBeActive>time(NULL)) return NULL;
+	while(!tmp_list->IsEmpty()){
+		readyList->Append(tmp_list->RemoveFront());
+	}
+	return tmp;
     }
 }
 

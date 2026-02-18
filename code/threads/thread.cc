@@ -22,6 +22,7 @@
 #include "synch.h"
 #include "sysdep.h"
 #include <stdlib.h>
+#include <time.h>
 
 // this is put at the top of the execution stack, for detecting stack overflows
 const int STACK_FENCEPOST = 0xdedbeef;
@@ -47,6 +48,7 @@ Thread::Thread(char *threadName, bool _has_dynamic_name /*=false*/) {
     }
     space = NULL;
     priority= rand()%10;
+    timeToBeActive=time(NULL);
     printf("priority: %d, name: %s \n", priority, name);
 }
 
@@ -201,7 +203,7 @@ void Thread::Yield() {
     ASSERT(this == kernel->currentThread);
 
     DEBUG(dbgThread, "Yielding thread: " << name);
-
+    printf("in yielding func");
     nextThread = kernel->scheduler->FindNextToRun();
     if (nextThread != NULL) {
         kernel->scheduler->ReadyToRun(this);

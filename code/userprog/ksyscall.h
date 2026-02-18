@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <cstdint>
 #include <limits>
+#include <time.h>
 
 void SysHalt() { kernel->interrupt->Halt(); }
 
@@ -24,6 +25,10 @@ int SysAdd(int op1, int op2) { return op1 + op2; }
 
 int SysSleep(int op1){
 	kernel->scheduler->Print();
+	kernel->currentThread->timeToBeActive = time(NULL) + op1;
+	printf("current thread will be active again at: %s",ctime(&(kernel->currentThread->timeToBeActive))); 
+	kernel->currentThread->Yield();
+	printf("after a? or before a?");
 	return op1;
 }
 
