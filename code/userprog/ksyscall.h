@@ -23,7 +23,15 @@ void SysHalt() { kernel->interrupt->Halt(); }
 int SysAdd(int op1, int op2) { return op1 + op2; }
 
 int SysSleep(int op1){
+    IntStatus oldLevel = kernel->interrupt->SetLevel(IntOff);
 	kernel->scheduler->Print();
+    Thread* t=kernel->currentThread;
+    t->waketick = kernel->stats->totalTicks+op1;
+    kernel->scheduler->sleepList->Append(t);
+    t->Sleep(false);
+    // t->Yield();
+    // kernel->scheduler->readyList->Remove(t);
+    kernel->interrupt->SetLevel(oldLevel);
 	return op1;
 }
 

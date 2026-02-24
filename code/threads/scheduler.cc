@@ -37,6 +37,7 @@ int compare(Thread* x, Thread* y){
 
 Scheduler::Scheduler() {
     readyList = new SortedList<Thread *>(&compare);
+    sleepList = new List<Thread*>();
     toBeDestroyed = NULL;
 }
 
@@ -62,6 +63,26 @@ void Scheduler::ReadyToRun(Thread *thread) {
     thread->setStatus(READY);
     readyList->Append(thread);
 //    kernel->currentThread->Yield();
+}
+
+void Scheduler::CheckSleepThread(){
+    ASSERT(kernel->interrupt->getLevel() == IntOff);
+    // printf("tick %d checking sleepers\n", kernel->stats->totalTicks);
+    List<Thread*> *tmp = new List<Thread*>();
+    int now=kernel->stats->totalTicks;
+    while (!sleepList->IsEmpty()) {
+        Thread* t = sleepList->RemoveFront();
+        printf("Thread %s wakeTick=%d now=%d\n",
+        t->getName(),
+        t->waketick,
+        now);
+        if (t->waketick <= now) {
+            ReadyToRun(t);
+        } else {
+            tmp->Append(t);
+        }
+    }
+    while(!tmp->IsEmpty()) sleepList->Append(tmp->RemoveFront());
 }
 
 //----------------------------------------------------------------------

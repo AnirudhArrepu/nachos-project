@@ -39,6 +39,7 @@ Thread::Thread(char *threadName, bool _has_dynamic_name /*=false*/) {
     name = threadName;
     stackTop = NULL;
     stack = NULL;
+    waketick=0;
     status = JUST_CREATED;
     for (int i = 0; i < MachineStateSize; i++) {
         machineState[i] = NULL;  // not strictly necessary, since

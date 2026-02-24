@@ -91,6 +91,7 @@ class Thread {
     int parrentID;
     int exitStatus;
     int priority;
+    int waketick;
     void FreeSpace() {
         if (space != 0) delete space;
     }
