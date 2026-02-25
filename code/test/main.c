@@ -69,13 +69,13 @@ int main() {
 
     /***********Spawn child process**********/
     for (i = 0; i < n; i++) {
-        students[i] = Exec("sinhvien");
+        students[i] = Exec("sinhvien", '\0', '\0');
         if (students[i] == -1) {
             PrintString("Create student failed\n");
             return 1;
         }
     }
-    water_machine = Exec("voinuoc");
+    water_machine = Exec("voinuoc", '\0', '\0');
     if (water_machine == 1) {
         PrintString("Create water machine failed\n");
         return 1;

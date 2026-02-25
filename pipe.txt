@@ -1,0 +1,28 @@
+pipe doesnt execute sequentially, it executes it concurrently
+
+bascially all the cmds in the pipe command get a buffer. the other commands basically use this buffer 
+
+cmd1 | cmd2
+each get a buffer
+
+
+## implementation steps
+
+note: there is no fork in nachos. a hack is thus not possible
+note: for htis lab we shall only implement the sequential nature. we wont be implementing the concurrently since we need to manage buffers, semaphores- which wud be too much for a lab
+
+1. modify shell.c to parse multiple commands
+2. we basically have to exec the process into a temporary filesystem and also pass this filesystem to the 2nd process which can use this and work on this. 
+
+
+so go to shell.c, then differentiate hte left and the right commands
+and in the exec of the left command, we need to output a filesystem.
+this filesystem will be inputted to the right command's exec. 
+
+/*spaceid temp = exec(left);
+spaceid final = exec2(right, temp);
+join(final);*/ not working
+
+
+spaceid temp = exec1(left, inpu, buffer)
+spaceid temp2 = exec1(right, buffer, output)

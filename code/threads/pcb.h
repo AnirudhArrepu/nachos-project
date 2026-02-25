@@ -14,13 +14,15 @@ class PCB {
     char filename[128];
 
    public:
+    char inputFile[60];
+    char outputFile[60];
     int parentID;
     int processID;
     PCB();
     PCB(int id);
     ~PCB();
 
-    int Exec(char *filename, int pid);
+    int Exec(char *filename, int pid, char* infile, char*outfile);
     int GetID();
     int GetNumWait();
 

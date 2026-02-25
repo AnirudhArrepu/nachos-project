@@ -48,7 +48,12 @@ void StartProcess_2(void* pid) {
                     // by doing the syscall "exit"
 }
 
-int PCB::Exec(char* filename, int id) {
+int PCB::Exec(char* filename, int id, char* infile, char*outfile) {
+    if (infile) strcpy(inputFile, infile);
+    else inputFile[0] = '\0';
+    if (outfile) strcpy(outputFile, outfile);
+    else outputFile[0] = '\0';
+    
     // cerr << filename << ' ' << pid << endl;
     multex->P();
 

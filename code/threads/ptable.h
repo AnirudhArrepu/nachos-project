@@ -16,13 +16,14 @@ class PTable {
    public:
     PTable(int size);
     ~PTable();
-    int ExecUpdate(char* name);
+    int ExecUpdate(char* name, char* infile, char* outfile);
     int ExitUpdate(int ec);
     int JoinUpdate(int id);
     int GetFreeSlot();
     bool IsExist(int pid);
     void Remove(int pid);
     char* GetFileName(int id);
+    PCB* GetPCB(int pid);
 };
 
 #endif

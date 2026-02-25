@@ -1,11 +1,12 @@
 #include "syscall.h"
 
 int main() {
-    SpaceId newProc;
+    SpaceId newProc, newProc2;
     OpenFileId input = _ConsoleInput;
     OpenFileId output = _ConsoleOutput;
     char prompt[2], ch, buffer[60];
-    int i;
+    char buffer1[60], buffer2[60];
+    int i,j,k;
 
     prompt[0] = '-';
     prompt[1] = '-';
@@ -23,8 +24,21 @@ int main() {
         buffer[--i] = '\0';
 
         if (i > 0) {
-            newProc = Exec(buffer);
+            j=0;
+            k=0;
+            while(buffer[j]!='|') {buffer1[k++]=buffer[j++];}
+            buffer1[k-1]='\0';
+            k=0; j++;
+            while(buffer[j]!='\0'){
+                buffer2[k++]=buffer[j++];
+            }
+            buffer2[k]='\0';
+            PrintString(buffer1);
+            PrintString(buffer2);
+            newProc = Exec(buffer1, '\0', "pipe.tmp");
             Join(newProc);
+            newProc2 = Exec(buffer2, "pipe.tmp", '\0');
+            Join(newProc2);
         }
     }
-}
+}   
