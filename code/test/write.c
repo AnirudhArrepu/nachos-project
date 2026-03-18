@@ -1,12 +1,15 @@
 #include "syscall.h"
 
 int main() {
-    OpenFileId output = _ConsoleOutput;
-    char msg[2];
-    msg[0] = 'h';
-    msg[1] = 'e';
+    OpenFileId in = _ConsoleInput;
+    OpenFileId out = _ConsoleOutput;
 
+    char buffer[64];
+    int n;
 
-    Write(msg, 2, output);
+    while ((n = Read(buffer, 64, in)) > 0) {
+        Write(buffer, n, out);
+    }
+
     Exit(0);
 }

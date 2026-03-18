@@ -50,9 +50,10 @@ void StartProcess_2(void* pid) {
 
 int PCB::Exec(char* filename, int id, char* infile, char*outfile) {
     if (infile) strcpy(inputFile, infile);
-    else inputFile[0] = '\0';
+    else inputFile[0] = NULL;
     if (outfile) strcpy(outputFile, outfile);
-    else outputFile[0] = '\0';
+    else outputFile[0] = NULL;
+    cerr << "PCB::Exec pid=" << id << " inputFile=[" << inputFile << "] outputFile=[" << outputFile << "]" << endl;
     
     // cerr << filename << ' ' << pid << endl;
     multex->P();

@@ -187,13 +187,15 @@ int SysClose(int id) { return kernel->fileSystem->Close(id); }
 
 int SysRead(char* buffer, int charCount, int fileId) {
     PCB* pcb = kernel->pTab->GetPCB(kernel->currentThread->processID);
+    cerr << "SysRead: fileId=" << fileId << " inputFile=[" << pcb->inputFile << "]" << endl;
     if (fileId == 0) {
-        // if(pcb->inputFile[0]!='\0'){
-        //     OpenFile *f = kernel->fileSystem->Open(pcb->inputFile);
-        //     int n=f->Read(buffer, charCount);
-        //     delete f;
-        //     return n;
-        // }
+        if(pcb->inputFile[0]!='\0'){
+            OpenFile *f = kernel->fileSystem->Open(pcb->inputFile);
+            // f->Seek(pcb->inputPos);
+            int n=f->Read(buffer, charCount);
+            delete f;
+            return n;
+        }
         return kernel->synchConsoleIn->GetString(buffer, charCount);
     }
     return kernel->fileSystem->Read(buffer, charCount, fileId);
@@ -202,13 +204,18 @@ int SysRead(char* buffer, int charCount, int fileId) {
 int SysWrite(char* buffer, int charCount, int fileId) {
     PCB* pcb = kernel->pTab->GetPCB(kernel->currentThread->processID);  
     if (fileId == 1) {
-        // if(pcb->outputFile[0]!='\0'){
-        //     kernel->fileSystem->Create(pcb->outputFile);
-        //     OpenFile *f=kernel->fileSystem->Open(pcb->outputFile);
-        //     int n=f->Write(buffer, charCount);
-        //     delete f;
-        //     return n;
-        // }
+        if (pcb->outputFile[0] != '\0') {
+            // Create if not exists
+            if(kernel->fileSystem->Open(pcb->outputFile) == NULL) {
+                kernel->fileSystem->Create(pcb->outputFile);
+            }
+            OpenFile *f = kernel->fileSystem->Open(pcb->outputFile);
+            if (f == NULL) return -1;
+            f->Seek(f->Length());
+            int n = f->Write(buffer, charCount);
+            delete f;
+            return n;
+        }
         return kernel->synchConsoleOut->PutString(buffer, charCount);
     }
     return kernel->fileSystem->Write(buffer, charCount, fileId);
@@ -222,7 +229,7 @@ int SysSeek(int seekPos, int fileId) {
     return kernel->fileSystem->Seek(seekPos, fileId);
 }
 
-int SysExec(char* name, char* infile, char* outfile) {
+int SysExec(char* name, char* infile=NULL, char* outfile=NULL) {
     // cerr << "call: `" << name  << "`"<< endl;
     OpenFile* oFile = kernel->fileSystem->Open(name);
     if (oFile == NULL) {

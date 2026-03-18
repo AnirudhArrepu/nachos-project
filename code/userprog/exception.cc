@@ -336,7 +336,8 @@ void handle_SC_Exec() {
         kernel->machine->WriteRegister(2, -1);
         return move_program_counter();
     }
-
+    cerr << "handle_SC_Exec: name=[" << name << "] infile=[" << (infile?infile:"NULL") << "] outfile=[" << (outfile?outfile:"NULL") << "]" << endl;
+    cerr << "virtAddr=" << virtAddr << " virtInfile=" << virtInfile << " virtOutfile=" << virtOutfile << endl;
     kernel->machine->WriteRegister(2, SysExec(name, infile, outfile));
     // DO NOT DELETE NAME, THE THEARD WILL DELETE IT LATER
     // delete[] name;

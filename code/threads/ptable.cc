@@ -56,6 +56,8 @@ int PTable::ExecUpdate(char* name, char*infile, char *outfile) {
     pcb[index]->SetFileName(name);
     kernel->fileSystem->Renew(index);
 
+    cerr << "ExecUpdate: name=[" << name << "] infile=[" << (infile?infile:"NULL") << "] outfile=[" << (outfile?outfile:"NULL") << "]" << endl;
+
     // parrentID là processID của currentThread
     pcb[index]->parentID = kernel->currentThread->processID;
 

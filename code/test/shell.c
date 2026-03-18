@@ -1,4 +1,5 @@
 #include "syscall.h"
+#define NULL 0
 
 int main() {
     SpaceId newProc, newProc2;
@@ -35,9 +36,11 @@ int main() {
             buffer2[k]='\0';
             PrintString(buffer1);
             PrintString(buffer2);
-            newProc = Exec(buffer1, '\0', "pipe.tmp");
+            Create("pipe.tmp");
+            PrintString("creating tmp file");
+            newProc = Exec(buffer1, NULL, "pipe.tmp");
             Join(newProc);
-            newProc2 = Exec(buffer2, "pipe.tmp", '\0');
+            newProc2 = Exec(buffer2, "pipe.tmp", NULL);
             Join(newProc2);
         }
     }

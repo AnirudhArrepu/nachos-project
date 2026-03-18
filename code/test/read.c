@@ -1,12 +1,12 @@
 #include "syscall.h"
 
 int main() {
-    char buf[100];
-    int n;
+    OpenFileId out = _ConsoleOutput;
+    char msg[] = "hello from producer\n";
+    int i;
 
-    n = Read(buf, 100, _ConsoleInput);
-    if (n > 0) {
-        Write(buf, n, _ConsoleOutput);
+    for(i = 0; i < 5; i++) {
+        Write(msg, 20, out);
     }
 
     Exit(0);

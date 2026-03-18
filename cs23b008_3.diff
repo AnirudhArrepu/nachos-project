@@ -1,0 +1,146 @@
+diff --git a/code/machine/interrupt.cc b/code/machine/interrupt.cc
+index 4ed8291..63ac8b8 100644
+--- a/code/machine/interrupt.cc
++++ b/code/machine/interrupt.cc
+@@ -158,6 +158,7 @@ void Interrupt::OneTick() {
+                                  // (interrupt handlers run with
+                                  // interrupts disabled)
+     CheckIfDue(FALSE);           // check for pending interrupts
++    kernel->scheduler->CheckSleepThread(); //it shd be here specifically since it shd work before interrupts are enabled
+     ChangeLevel(IntOff, IntOn);  // re-enable interrupts
+     if (yieldOnReturn) {         // if the timer device handler asked
+                                  // for a context switch, ok to do it now
+@@ -166,6 +167,8 @@ void Interrupt::OneTick() {
+         kernel->currentThread->Yield();
+         status = oldStatus;
+     }
++
++    //implementation fo sleep:
+ }
+ 
+ //----------------------------------------------------------------------
+@@ -196,6 +199,7 @@ void Interrupt::YieldOnReturn() {
+ //	more for us to do.
+ //----------------------------------------------------------------------
+ void Interrupt::Idle() {
++    kernel->scheduler->CheckSleepThread();
+     DEBUG(dbgInt, "Machine idling; checking for interrupts.");
+     status = IdleMode;
+     if (CheckIfDue(TRUE)) {  // check for any pending interrupts
+diff --git a/code/test/sleep.c b/code/test/sleep.c
+index 4674dc2..a48a03b 100644
+--- a/code/test/sleep.c
++++ b/code/test/sleep.c
+@@ -1,7 +1,8 @@
+ #include <syscall.h>
+ 
+ int main(){
+-	PrintString("before sleeping");
+-	Sleep(5);
++	PrintString("before sleeping for 5 \n");
++	// Exec("../test/add");
++	Sleep(500);
+ 	PrintString("after sleeping");
+ }
+diff --git a/code/threads/scheduler.cc b/code/threads/scheduler.cc
+index f3a5041..facc5c4 100644
+--- a/code/threads/scheduler.cc
++++ b/code/threads/scheduler.cc
+@@ -37,6 +37,7 @@ int compare(Thread* x, Thread* y){
+ 
+ Scheduler::Scheduler() {
+     readyList = new SortedList<Thread *>(&compare);
++    sleepList = new List<Thread*>();
+     toBeDestroyed = NULL;
+ }
+ 
+@@ -64,6 +65,26 @@ void Scheduler::ReadyToRun(Thread *thread) {
+ //    kernel->currentThread->Yield();
+ }
+ 
++void Scheduler::CheckSleepThread(){
++    ASSERT(kernel->interrupt->getLevel() == IntOff);
++    // printf("tick %d checking sleepers\n", kernel->stats->totalTicks);
++    List<Thread*> *tmp = new List<Thread*>();
++    int now=kernel->stats->totalTicks;
++    while (!sleepList->IsEmpty()) {
++        Thread* t = sleepList->RemoveFront();
++        printf("Thread %s wakeTick=%d now=%d\n",
++        t->getName(),
++        t->waketick,
++        now);
++        if (t->waketick <= now) {
++            ReadyToRun(t);
++        } else {
++            tmp->Append(t);
++        }
++    }
++    while(!tmp->IsEmpty()) sleepList->Append(tmp->RemoveFront());
++}
++
+ //----------------------------------------------------------------------
+ // Scheduler::FindNextToRun
+ // 	Return the next thread to be scheduled onto the CPU.
+diff --git a/code/threads/scheduler.h b/code/threads/scheduler.h
+index 911f0db..d64e0fc 100644
+--- a/code/threads/scheduler.h
++++ b/code/threads/scheduler.h
+@@ -31,11 +31,11 @@ class Scheduler {
+     void CheckToBeDestroyed();  // Check if thread that had been
+                                 // running needs to be deleted
+     void Print();               // Print contents of ready list
+-
+     // SelfTest for scheduler is implemented in class Thread
+-
+-   private:
++    List<Thread*>* sleepList;
++    void CheckSleepThread();
+     SortedList<Thread*>* readyList;  // queue of threads that are ready to run,
++    private:
+                                // but not running
+     Thread* toBeDestroyed;     // finishing thread to be destroyed
+                                // by the next thread that runs
+diff --git a/code/threads/thread.cc b/code/threads/thread.cc
+index 819ba61..17d5802 100644
+--- a/code/threads/thread.cc
++++ b/code/threads/thread.cc
+@@ -39,6 +39,7 @@ Thread::Thread(char *threadName, bool _has_dynamic_name /*=false*/) {
+     name = threadName;
+     stackTop = NULL;
+     stack = NULL;
++    waketick=0;
+     status = JUST_CREATED;
+     for (int i = 0; i < MachineStateSize; i++) {
+         machineState[i] = NULL;  // not strictly necessary, since
+diff --git a/code/threads/thread.h b/code/threads/thread.h
+index f94cc5f..867a67d 100644
+--- a/code/threads/thread.h
++++ b/code/threads/thread.h
+@@ -91,6 +91,7 @@ class Thread {
+     int parrentID;
+     int exitStatus;
+     int priority;
++    int waketick;
+     void FreeSpace() {
+         if (space != 0) delete space;
+     }
+diff --git a/code/userprog/ksyscall.h b/code/userprog/ksyscall.h
+index a70032b..b2e69a5 100644
+--- a/code/userprog/ksyscall.h
++++ b/code/userprog/ksyscall.h
+@@ -23,7 +23,15 @@ void SysHalt() { kernel->interrupt->Halt(); }
+ int SysAdd(int op1, int op2) { return op1 + op2; }
+ 
+ int SysSleep(int op1){
++    IntStatus oldLevel = kernel->interrupt->SetLevel(IntOff);
+ 	kernel->scheduler->Print();
++    Thread* t=kernel->currentThread;
++    t->waketick = kernel->stats->totalTicks+op1;
++    kernel->scheduler->sleepList->Append(t);
++    t->Sleep(false);
++    // t->Yield();
++    // kernel->scheduler->readyList->Remove(t);
++    kernel->interrupt->SetLevel(oldLevel);
+ 	return op1;
+ }
+ 

@@ -1,7 +1,15 @@
-#include <syscall.h>
+#include "syscall.h"
 
-int main(){
-	int i;
-	for(i=0; i<10; i++) PrintString("sub process \t");
-	Exit(0);
+int main() {
+    OpenFileId in = _ConsoleInput;
+    OpenFileId out = _ConsoleOutput;
+
+    char buffer[64];
+    int n;
+
+    while ((n = Read(buffer, 64, in)) > 0) {
+        Write(buffer, n, out);
+    }
+
+    Exit(0);
 }

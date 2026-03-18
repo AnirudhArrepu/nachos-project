@@ -1,17 +1,13 @@
-/* add.c
- *	Simple program to test whether the systemcall interface works.
- *
- *	Just do a add syscall that adds two values and returns the result.
- *
- */
-
 #include "syscall.h"
 
 int main() {
-   	int i;
-	for(i=0; i<10; i++) PrintString("child process\n");
+    OpenFileId out = _ConsoleOutput;
+    char msg[] = "hello from producer\n";
+    int i;
 
-	Exit(0);
+    for(i = 0; i < 5; i++) {
+        Write(msg, 20, out);
+    }
 
-    /* not reached */
+    Exit(0);
 }
