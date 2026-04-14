@@ -102,8 +102,9 @@ AddrSpace::~AddrSpace() {
 //----------------------------------------------------------------------
 
 AddrSpace::AddrSpace(char *fileName) {
-    OpenFile *executable = kernel->fileSystem->Open(fileName);
+    executable = kernel->fileSystem->Open(fileName);
     NoffHeader noffH;
+    curr_page_i = 0;
     unsigned int i, size, j, offset;
     unsigned int numCodePage,
         numDataPage;  // số trang cho phần code và phần initData
@@ -149,8 +150,8 @@ AddrSpace::AddrSpace(char *fileName) {
     for (i = 0; i < numPages; i++) {
         pageTable[i].virtualPage = i;  // for now, virtual page # = phys page #
         pageTable[i].physicalPage = kernel->gPhysPageBitMap->FindAndSet();
-        // cerr << pageTable[i].physicalPage << endl;
-        pageTable[i].valid = TRUE;
+        cout << pageTable[i].physicalPage << endl;
+        pageTable[i].valid = FALSE; //to lead to page fault exception
         pageTable[i].use = FALSE;
         pageTable[i].dirty = FALSE;
         pageTable[i].readOnly = FALSE;  // if the code segment was entirely on
@@ -172,7 +173,7 @@ AddrSpace::AddrSpace(char *fileName) {
     }
 
     if (noffH.initData.size > 0) {
-        for (i = 0; i < numPages; i++)
+        for (i = 0; i <numPages; i++)
             executable->ReadAt(
                 &(kernel->machine->mainMemory[noffH.initData.virtualAddr]) +
                     (pageTable[i].physicalPage * PageSize),

@@ -1,3 +1,4 @@
+#pragma once
 /* noff.h
  *     Data structures defining the Nachos Object Code Format
  *

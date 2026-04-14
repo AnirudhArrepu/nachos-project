@@ -426,6 +426,16 @@ void handle_SC_GetPid() {
     return move_program_counter();
 }
 
+void handle_PageFault(){
+    int i;
+    i=kernel->addrspace->curr_page_i;
+    cout << i << endl;
+    kernel->addrspace->pageTable[i].valid=TRUE;
+    i++;
+    kernel->addrspace->curr_page_i=i;
+    return;
+} 
+
 void ExceptionHandler(ExceptionType which) {
     int type = kernel->machine->ReadRegister(2);
 
@@ -436,7 +446,11 @@ void ExceptionHandler(ExceptionType which) {
             kernel->interrupt->setStatus(SystemMode);
             DEBUG(dbgSys, "Switch to system mode\n");
             break;
-        case PageFaultException:
+        case PageFaultException: {
+	    cerr << "page fault exception";
+	    handle_PageFault();
+	    
+	    return; }
         case ReadOnlyException:
         case BusErrorException:
         case AddressErrorException:

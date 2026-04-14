@@ -61,6 +61,7 @@ class Kernel {
     FileSystem *fileSystem;
     PostOfficeInput *postOfficeIn;
     PostOfficeOutput *postOfficeOut;
+    AddrSpace *addrspace;
 
     Semaphore *addrLock;
     Bitmap *gPhysPageBitMap;

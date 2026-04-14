@@ -266,6 +266,7 @@ int main(int argc, char **argv) {
     if (userProgName != NULL) {
         AddrSpace *space =
             new AddrSpace(userProgName);  // load the program into the space
+        kernel->addrspace = space;
         ASSERT(space != (AddrSpace *)NULL);
         space->Execute();    // run the program
         ASSERTNOTREACHED();  // Execute never returns
