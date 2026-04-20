@@ -269,4 +269,9 @@ void Condition::Broadcast(Lock *conditionLock) {
     while (!waitQueue->IsEmpty()) {
         Signal(conditionLock);
     }
+// Add at the bottom of synch.cc
+// Make sure #include "main.h" is at the top of synch.cc
+}
+bool Lock::IsHeldByCurrentThread() {
+    return lockHolder == kernel->currentThread;
 }

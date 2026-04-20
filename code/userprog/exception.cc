@@ -442,7 +442,159 @@ void ExceptionHandler(ExceptionType which) {
             switch (type) {
                 case SC_Halt:
                     return handle_SC_Halt();
-               	case SC_Sleep:
+               	// ---------------------------------------------------------------
+// SC_Pipe handler
+// Signature: int Pipe(int *readFd, int *writeFd)
+//   ReadRegister(4) = user virtual address of readFd  (int*)
+//   ReadRegister(5) = user virtual address of writeFd (int*)
+// Returns 0 on success, -1 on failure (via Register 2)
+// ---------------------------------------------------------------
+case SC_Pipe: {
+    // Read the two user-space pointer arguments
+    int rdAddr = kernel->machine->ReadRegister(4);
+    int wrAddr = kernel->machine->ReadRegister(5);
+
+    // Allocate two fd slots in the current process's PCB
+    PCB* pcb = kernel->currentThread->pcb;   // adjust to your PCB access pattern
+
+    int rdFd = pcb->AllocFD();
+    if (rdFd == -1) {
+        kernel->machine->WriteRegister(2, -1);
+        return move_program_counter();
+    }
+
+    int wrFd = pcb->AllocFD();
+    if (wrFd == -1) {
+        kernel->machine->WriteRegister(2, -1);
+        return move_program_counter();
+    }
+
+    // Create one shared pipe buffer for both ends
+    PipeBuffer* pipe = new PipeBuffer();
+
+    pcb->fd_table[rdFd].type = FD_PIPE_RD;
+    pcb->fd_table[rdFd].pipe = pipe;
+
+    pcb->fd_table[wrFd].type = FD_PIPE_WR;
+    pcb->fd_table[wrFd].pipe = pipe;
+
+    // Write the fd values back into user space
+    // We use ReadMem / WriteMem because the OS cannot dereference
+    // user virtual addresses directly.
+
+    // Write rdFd → *rdAddr  (4 bytes)
+    // Method A: via ReadMem/WriteMem (word-by-word)
+    kernel->machine->WriteMem(rdAddr, 4, rdFd);
+    kernel->machine->WriteMem(wrAddr, 4, wrFd);
+
+    // (Alternative Method B shown below for reference — using
+    //  StringSys2User the same way your instructor's snippet does)
+    //
+    //   int tmp = rdFd;
+    //   StringSys2User((char*)&tmp, rdAddr, 4);
+    //   tmp = wrFd;
+    //   StringSys2User((char*)&tmp, wrAddr, 4);
+
+    kernel->machine->WriteRegister(2, 0);  // success
+    return move_program_counter();
+}
+
+// ---------------------------------------------------------------
+// SC_Write2 handler
+// Signature: int write2(int fd, char *buf, int nbytes)
+//   ReadRegister(4) = fd
+//   ReadRegister(5) = user virtual address of buf
+//   ReadRegister(6) = number of bytes to write
+// Returns nbytes written, or -1 on error (via Register 2)
+// ---------------------------------------------------------------
+case SC_Write2: {
+    int fd     = kernel->machine->ReadRegister(4);
+    int bufPtr = kernel->machine->ReadRegister(5);
+    int nBytes = kernel->machine->ReadRegister(6);
+
+    PCB* pcb = kernel->currentThread->pcb;
+
+    // Validate fd
+    if (!pcb->ValidFD(fd) || pcb->fd_table[fd].type != FD_PIPE_WR) {
+        kernel->machine->WriteRegister(2, -1);
+        return move_program_counter();
+    }
+
+    // Copy the user buffer into OS (kernel) space
+    // stringUser2System allocates a new char[] and copies nBytes
+    char* osBuf = stringUser2System(bufPtr, nBytes);
+    if (osBuf == NULL) {
+        kernel->machine->WriteRegister(2, -1);
+        return move_program_counter();
+    }
+
+    PipeBuffer* pipe = pcb->fd_table[fd].pipe;
+
+    // Write each byte into the ring buffer, blocking if full
+    for (int i = 0; i < nBytes; i++) {
+        pipe->spaceAvail->P();          // wait for space
+        pipe->lock->Acquire();
+
+        pipe->data[pipe->writePos] = osBuf[i];
+        pipe->writePos = (pipe->writePos + 1) % PIPE_BUFFER_SIZE;
+        pipe->count++;
+
+        pipe->lock->Release();
+        pipe->dataAvail->V();           // signal data available
+    }
+
+    delete[] osBuf;
+    kernel->machine->WriteRegister(2, nBytes);
+    return move_program_counter();
+}
+
+// ---------------------------------------------------------------
+// SC_Read2 handler
+// Signature: int read2(int fd, char *buf, int nbytes)
+//   ReadRegister(4) = fd
+//   ReadRegister(5) = user virtual address of buf
+//   ReadRegister(6) = number of bytes to read
+// Returns nbytes read, or -1 on error (via Register 2)
+// ---------------------------------------------------------------
+case SC_Read2: {
+    int fd     = kernel->machine->ReadRegister(4);
+    int bufPtr = kernel->machine->ReadRegister(5);
+    int nBytes = kernel->machine->ReadRegister(6);
+
+    PCB* pcb = kernel->currentThread->pcb;
+
+    // Validate fd
+    if (!pcb->ValidFD(fd) || pcb->fd_table[fd].type != FD_PIPE_RD) {
+        kernel->machine->WriteRegister(2, -1);
+        return move_program_counter();
+    }
+
+    PipeBuffer* pipe = pcb->fd_table[fd].pipe;
+
+    // Allocate OS buffer, read from pipe ring buffer
+    char* osBuf = new char[nBytes + 1];
+    memset(osBuf, 0, nBytes + 1);
+
+    for (int i = 0; i < nBytes; i++) {
+        pipe->dataAvail->P();           // wait for data
+        pipe->lock->Acquire();
+
+        osBuf[i] = pipe->data[pipe->readPos];
+        pipe->readPos = (pipe->readPos + 1) % PIPE_BUFFER_SIZE;
+        pipe->count--;
+
+        pipe->lock->Release();
+        pipe->spaceAvail->V();          // signal space freed
+    }
+
+    // Copy the OS buffer back to user space
+    StringSys2User(osBuf, bufPtr, nBytes);
+
+    delete[] osBuf;
+    kernel->machine->WriteRegister(2, nBytes);
+    return move_program_counter();
+}
+		case SC_Sleep:
 		    return handle_SC_Sleep();
 		case SC_Abs:
 		    return handle_SC_Abs();

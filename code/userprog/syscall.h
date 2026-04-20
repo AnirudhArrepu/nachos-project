@@ -50,6 +50,9 @@
 #define SC_GetPid 54
 #define SC_Abs 55
 #define SC_Sleep 56
+#define SC_Pipe    57
+#define SC_Write2  58
+#define SC_Read2   59
 #ifndef IN_ASM
 
 /* The system call interface.  These are the operations the Nachos
@@ -68,6 +71,10 @@ void Halt();
 /*
  * Add the two operants and return the result
  */
+
+int  Pipe(int *readFd, int *writeFd);
+int  write2(int fd, char *buf, int nbytes);
+int  read2(int fd, char *buf, int nbytes);
 
 int Add(int op1, int op2);
 

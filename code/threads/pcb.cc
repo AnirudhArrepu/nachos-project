@@ -1,13 +1,47 @@
-#include "synch.h"
+#include "copyright.h"
+#include "main.h"       // must be before pcb.h because we use kernel
 #include "pcb.h"
+#include <string.h>     // for memset and strcpy
 
-PCB::PCB(int id) {
-    this->processID = kernel->currentThread->processID;
-    joinsem = new Semaphore("joinsem", 0);
-    exitsem = new Semaphore("exitsem", 0);
-    multex = new Semaphore("multex", 1);
+// PipeBuffer constructor & destructor
+PipeBuffer::PipeBuffer() {
+    memset(data, 0, sizeof(data));
+    readPos   = 0;
+    writePos  = 0;
+    count     = 0;
+    refCount  = 2;
+    lock      = new Lock("PipeLock");
+    dataAvail = new Semaphore("PipeDataAvail", 0);
+    spaceAvail= new Semaphore("PipeSpaceAvail", PIPE_BUFFER_SIZE);
 }
 
+PipeBuffer::~PipeBuffer() {
+    delete lock;
+    delete dataAvail;
+    delete spaceAvail;
+}
+
+// PCB constructor (the one with parameter)
+PCB::PCB(int id) {
+    processID = id;                    // better than kernel->currentThread->processID here
+    parentID  = -1;
+    joinsem   = new Semaphore("joinsem", 0);
+    exitsem   = new Semaphore("exitsem", 0);
+    multex    = new Semaphore("multex", 1);
+
+    // Initialize fd_table
+    for (int i = 0; i < MAX_FD_ENTRY; i++) {
+        fd_table[i].type = FD_EMPTY;
+        fd_table[i].pipe = NULL;
+    }
+
+    thread = NULL;
+    numwait = 0;
+    exitcode = 0;
+    filename[0] = '\0';
+}
+
+// Default constructor (if used somewhere)
 PCB::~PCB() {
     delete joinsem;
     delete exitsem;
@@ -18,8 +52,39 @@ PCB::~PCB() {
         thread->Finish();
         // delete thread;
     }
+    for (int i = 0; i < MAX_FD_ENTRY; i++) {
+        if (fd_table[i].type != FD_EMPTY)
+            FreeFD(i);
+    }
 
     delete[] filename;
+}
+
+int PCB::AllocFD() {
+    // Start from 3 to skip stdin/stdout/stderr
+    for (int i = 3; i < MAX_FD_ENTRY; i++) {
+        if (fd_table[i].type == FD_EMPTY)
+            return i;
+    }
+    return -1;   // table full
+}
+
+void PCB::FreeFD(int fd) {
+    if (!ValidFD(fd)) return;
+
+    PipeBuffer* pipe = fd_table[fd].pipe;
+    fd_table[fd].type = FD_EMPTY;
+    fd_table[fd].pipe = NULL;
+
+    if (pipe != NULL) {
+        pipe->refCount--;
+        if (pipe->refCount <= 0)
+            delete pipe;   // last reference gone → free the buffer
+    }
+}
+
+bool PCB::ValidFD(int fd) {
+    return (fd >= 0 && fd < MAX_FD_ENTRY && fd_table[fd].type != FD_EMPTY);
 }
 
 void StartProcess_2(void* pid) {

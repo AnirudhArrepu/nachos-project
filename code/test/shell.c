@@ -1,30 +1,28 @@
+/* shell.c */
 #include "syscall.h"
 
-int main() {
-    SpaceId newProc;
-    OpenFileId input = _ConsoleInput;
-    OpenFileId output = _ConsoleOutput;
-    char prompt[2], ch, buffer[60];
-    int i;
+int main()
+{
+    int  x, y;       /* x = read fd,  y = write fd */
+    int  rt, rt2;
+    char buf1[] = "Hello World\0";
+    char buf2[20];
 
-    prompt[0] = '-';
-    prompt[1] = '-';
-
-    while (1) {
-        Write(prompt, 2, output);
-
-        i = 0;
-
-        do {
-            Read(&buffer[i], 1, input);
-
-        } while (buffer[i++] != '\n');
-
-        buffer[--i] = '\0';
-
-        if (i > 0) {
-            newProc = Exec(buffer);
-            Join(newProc);
-        }
+    rt = Pipe(&x, &y);
+    if (rt == -1) {
+        Exit(-1);
     }
+
+    rt2 = Exec("child");   /* path to the child binary */
+
+    if (rt2 == 0) {
+        /* ---- parent ---- */
+        write2(y, buf1, 10);
+    } else {
+        /* ---- child  ---- */
+        read2(x, buf2, 10);
+        PrintString(buf2);
+    }
+
+    Exit(0);
 }
