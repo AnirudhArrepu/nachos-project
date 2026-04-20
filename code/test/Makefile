@@ -106,16 +106,23 @@ AS = $(GCCDIR)as
 LD = $(GCCDIR)ld
 
 INCDIR =-I../userprog -I../lib
-CFLAGS = -G 0 -c $(INCDIR) -B/home/usr/local/nachos/lib/gcc-lib/decstation-ultrix/2.95.2/ -B/home/usr/local/nachos/decstation-ultrix/bin/
+CFLAGS = -G 0 -c $(INCDIR) -B/home/usr/local/nachos/lib/gcc-lib/decstation-ultrix/2.95.2/ -B/home/usr/local/nachos/decstation-ultrixbin/
 
 ifeq ($(hosttype),unknown)
 PROGRAMS = unknownhost
 else
 # change this if you create a new test program!
-PROGRAMS = read write sleep abs add halt shell matmult sort segments test_syscall num_io char_io random str_io ascii bubblesort help create_file open_file readwrite exec test_sem sinhvien voinuoc main
+PROGRAMS = dp read write sleep abs add halt shell matmult sort segments test_syscall num_io char_io random str_io ascii bubblesort help create_file open_file readwrite exec test_sem sinhvien voinuoc main
 endif
 
 all: $(PROGRAMS)
+
+dp.o : dp.c
+	$(CC) $(CFLAGS) -c dp.c
+
+dp: dp.o start.o
+	$(LD) $(LDFLAGS) start.o dp.o -o dp.coff
+	$(COFF2NOFF) dp.coff dp
 
 sleep.o : sleep.c
 	$(CC) $(CFLAGS) -c sleep.c

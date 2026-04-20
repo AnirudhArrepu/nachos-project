@@ -86,7 +86,9 @@ AddrSpace::AddrSpace() {
 AddrSpace::~AddrSpace() {
     int i;
     for (i = 0; i < numPages; i++) {
-        kernel->gPhysPageBitMap->Clear(pageTable[i].physicalPage);
+    	if(pageTable[i].physicalPage!=-1){
+	    kernel->gPhysPageBitMap->Clear(pageTable[i].physicalPage);
+	}
     }
     delete[] pageTable;
 }
@@ -103,7 +105,7 @@ AddrSpace::~AddrSpace() {
 
 AddrSpace::AddrSpace(char *fileName) {
     executable = kernel->fileSystem->Open(fileName);
-    NoffHeader noffH;
+    //NoffHeader noffH;
     curr_page_i = 0;
     unsigned int i, size, j, offset;
     unsigned int numCodePage,
@@ -112,19 +114,19 @@ AddrSpace::AddrSpace(char *fileName) {
         tempDataSize;  // kích thước ghi vào trang cuối Code, initData, và trang
                        // đầu của initData
 
-    if (executable == NULL) {
+    if (this->executable == NULL) {
         DEBUG(dbgFile, "\n Error opening file.");
         return;
     }
     //đọc header của file
-    executable->ReadAt((char *)&noffH, sizeof(noffH), 0);
-    if ((noffH.noffMagic != NOFFMAGIC) &&
-        (WordToHost(noffH.noffMagic) == NOFFMAGIC))
-        SwapHeader(&noffH);
-    ASSERT(noffH.noffMagic == NOFFMAGIC);
+    this->executable->ReadAt((char *)&this->noffH, sizeof(this->noffH), 0);
+    if ((this->noffH.noffMagic != NOFFMAGIC) &&
+        (WordToHost(this->noffH.noffMagic) == NOFFMAGIC))
+        SwapHeader(&this->noffH);
+    ASSERT(this->noffH.noffMagic == NOFFMAGIC);
     kernel->addrLock->P();
     // how big is address space?
-    size = noffH.code.size + noffH.initData.size + noffH.uninitData.size +
+    size = this->noffH.code.size + this->noffH.initData.size + this->noffH.uninitData.size +
            UserStackSize;  // we need to increase the size
                            // to leave room for the stack
     numPages = divRoundUp(size, PageSize);
@@ -149,23 +151,24 @@ AddrSpace::AddrSpace(char *fileName) {
     pageTable = new TranslationEntry[numPages];
     for (i = 0; i < numPages; i++) {
         pageTable[i].virtualPage = i;  // for now, virtual page # = phys page #
-        pageTable[i].physicalPage = kernel->gPhysPageBitMap->FindAndSet();
-        cout << pageTable[i].physicalPage << endl;
-        pageTable[i].valid = FALSE; //to lead to page fault exception
+        //pageTable[i].physicalPage = kernel->gPhysPageBitMap->FindAndSet();
+        pageTable[i].physicalPage = -1;
+	cout << pageTable[i].virtualPage << endl;
+	pageTable[i].valid = FALSE; //to lead to page fault exception
         pageTable[i].use = FALSE;
         pageTable[i].dirty = FALSE;
         pageTable[i].readOnly = FALSE;  // if the code segment was entirely on
         // a separate page, we could set its
         // pages to be read-only
         // xóa các trang này trên memory
-        bzero(&(kernel->machine
-                    ->mainMemory[pageTable[i].physicalPage * PageSize]),
-              PageSize);
+	//bzero(&(kernel->machine
+         //           ->mainMemory[pageTable[i].physicalPage * PageSize]),
+          //    PageSize);
         DEBUG(dbgAddr, "phyPage " << pageTable[i].physicalPage);
     }
-
+/*
     if (noffH.code.size > 0) {
-        for (i = 0; i < numPages; i++)
+        for (i =0; i < 0; i++)
             executable->ReadAt(
                 &(kernel->machine->mainMemory[noffH.code.virtualAddr]) +
                     (pageTable[i].physicalPage * PageSize),
@@ -173,15 +176,15 @@ AddrSpace::AddrSpace(char *fileName) {
     }
 
     if (noffH.initData.size > 0) {
-        for (i = 0; i <numPages; i++)
+        for (i = 0; i <0; i++)
             executable->ReadAt(
                 &(kernel->machine->mainMemory[noffH.initData.virtualAddr]) +
                     (pageTable[i].physicalPage * PageSize),
                 PageSize, noffH.initData.inFileAddr + (i * PageSize));
     }
-
+*/
     kernel->addrLock->V();
-    delete executable;
+    //delete executable;
     return;
 }
 

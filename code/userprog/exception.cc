@@ -426,15 +426,134 @@ void handle_SC_GetPid() {
     return move_program_counter();
 }
 
+
+void handle_PageFault() {
+    int badAddr = kernel->machine->ReadRegister(BadVAddrReg);
+    int vpn = badAddr / PageSize;
+
+    AddrSpace *as = kernel->currentThread->space;
+
+    // ---- Safety: bounds check ----
+    if (vpn < 0 || vpn >= as->numPages) {
+        cerr << "Invalid VPN " << vpn << "\n";
+        SysHalt();
+    }
+
+    TranslationEntry *pte = &as->pageTable[vpn];
+
+    // ---- If already valid, nothing to do ----
+    if (pte->valid) return;
+
+    // ---- Allocate physical page ----
+    int physPage = kernel->gPhysPageBitMap->FindAndSet();
+    if(physPage == -1){
+	cout << "out of phys mem" << endl;
+	SysHalt();
+    }
+
+
+    pte->physicalPage = physPage;
+    pte->valid = TRUE;
+    pte->use = FALSE;
+    pte->dirty = FALSE;
+
+    char *mem = &(kernel->machine->mainMemory[physPage * PageSize]);
+
+    // ---- Always zero-fill first ----
+    bzero(mem, PageSize);
+
+    int virtPageAddr = vpn * PageSize;
+
+    // =========================
+    // Load CODE segment (overlap-aware)
+    // =========================
+    int codeStart = as->noffH.code.virtualAddr;
+    int codeEnd   = codeStart + as->noffH.code.size;
+
+    if (virtPageAddr < codeEnd && virtPageAddr + PageSize > codeStart) {
+
+        int start = (virtPageAddr > codeStart) ? virtPageAddr : codeStart;
+        int end   = ((virtPageAddr + PageSize) < codeEnd) ? 
+                     (virtPageAddr + PageSize) : codeEnd;
+
+        int size = end - start;
+
+        as->executable->ReadAt(
+            mem + (start - virtPageAddr),
+            size,
+            as->noffH.code.inFileAddr + (start - codeStart)
+        );
+    }
+
+    // =========================
+    // Load INIT DATA segment (overlap-aware)
+    // =========================
+    int dataStart = as->noffH.initData.virtualAddr;
+    int dataEnd   = dataStart + as->noffH.initData.size;
+
+    if (virtPageAddr < dataEnd && virtPageAddr + PageSize > dataStart) {
+
+        int start = (virtPageAddr > dataStart) ? virtPageAddr : dataStart;
+        int end   = ((virtPageAddr + PageSize) < dataEnd) ? 
+                     (virtPageAddr + PageSize) : dataEnd;
+
+        int size = end - start;
+
+        as->executable->ReadAt(
+            mem + (start - virtPageAddr),
+            size,
+            as->noffH.initData.inFileAddr + (start - dataStart)
+        );
+    }
+
+    // ---- Stack / uninitialized data already zero-filled ----
+
+    kernel->stats->numPageFaults++;
+}
+
+/*
 void handle_PageFault(){
-    int i;
-    i=kernel->addrspace->curr_page_i;
-    cout << i << endl;
-    kernel->addrspace->pageTable[i].valid=TRUE;
-    i++;
-    kernel->addrspace->curr_page_i=i;
-    return;
-} 
+	int virtpageaddr = kernel->machine->ReadRegister(BadVAddrReg);
+	int vpn = virtpageaddr/PageSize;
+
+	if(kernel->addrspace->pageTable[vpn].valid) return;
+
+	virtpageaddr = vpn*PageSize;
+	kernel->addrspace->pageTable[vpn].physicalPage =kernel->gPhysPageBitMap->FindAndSet();
+	kernel->addrspace->pageTable[vpn].valid=TRUE;
+	int phyaddr = kernel->addrspace->pageTable[vpn].physicalPage;
+	ASSERT(phyaddr!=-1);
+
+	bzero(&(kernel->machine->mainMemory[phyaddr * PageSize]), PageSize);	
+
+	int offset =virtpageaddr - kernel->addrspace->noffH.code.virtualAddr;
+	int rem = kernel->addrspace->noffH.code.size - offset;
+	int size = rem < PageSize ? rem : PageSize;
+
+	if(virtpageaddr >= kernel->addrspace->noffH.code.virtualAddr && virtpageaddr < kernel->addrspace->noffH.code.virtualAddr + kernel->addrspace->noffH.code.size){
+		kernel->addrspace->executable->ReadAt(
+				&(kernel->machine->mainMemory[phyaddr * PageSize]),
+				size,
+				kernel->addrspace->noffH.code.inFileAddr + (virtpageaddr - kernel->addrspace->noffH.code.virtualAddr));
+	} else if(virtpageaddr >= kernel->addrspace->noffH.initData.virtualAddr && virtpageaddr < kernel->addrspace->noffH.initData.virtualAddr + kernel->addrspace->noffH.initData.size){
+		offset = virtpageaddr - kernel->addrspace->noffH.initData.virtualAddr;
+		rem = kernel->addrspace->noffH.code.size - offset;
+		size = rem<PageSize ? rem:PageSize;
+		
+		kernel->addrspace->executable->ReadAt(
+				&(kernel->machine->mainMemory[phyaddr * PageSize]),
+				size,
+				kernel->addrspace->noffH.initData.inFileAddr + (virtpageaddr - kernel->addrspace->noffH.initData.virtualAddr));
+	}else{
+		bzero(&(kernel->machine->mainMemory[phyaddr * PageSize]), PageSize);
+	}
+	kernel->addrspace->pageTable[vpn].valid=TRUE;
+
+	kernel->stats->numPageFaults++;
+
+	return;
+}
+*/
 
 void ExceptionHandler(ExceptionType which) {
     int type = kernel->machine->ReadRegister(2);

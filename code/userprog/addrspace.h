@@ -43,11 +43,11 @@ class AddrSpace {
 
     // void InitRegisters();
     TranslationEntry *pageTable;  // Assume linear page table translation
-    private:
+//    private:
                                   // for now!
     unsigned int numPages;        // Number of pages in the virtual
                                   // address space
-
+	private:
     void InitRegisters();  // Initialize user-level CPU registers,
                            // before jumping to user code
 };
