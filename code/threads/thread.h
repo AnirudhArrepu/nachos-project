@@ -44,6 +44,17 @@
 #include "machine.h"
 #include "addrspace.h"
 
+#include "pipe.h"
+
+#define MAX_FD 20
+
+enum FDType { FD_NONE, FD_PIPE_READ, FD_PIPE_WRITE };
+
+struct FDEntry {
+    FDType type;
+    Pipe *pipe;
+};
+
 // CPU register state to be saved on context switch.
 // The x86 needs to save only a few registers,
 // SPARC and MIPS needs to save 10 registers,
@@ -95,7 +106,7 @@ class Thread {
     void FreeSpace() {
         if (space != 0) delete space;
     }
-
+    FDEntry fdTable[MAX_FD];
     // basic thread operations
 
     void Fork(VoidFunctionPtr func, void *arg);

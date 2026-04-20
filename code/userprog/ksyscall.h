@@ -221,6 +221,18 @@ int SysExec(char* name) {
     return kernel->pTab->ExecUpdate(name);
 }
 
+int Pipe(int *readFd, int *writeFd) {
+    return syscall(SC_Pipe, readFd, writeFd, 0, 0);
+}
+
+int Write2(int fd, char *buffer, int size) {
+    return syscall(SC_Write2, fd, buffer, size, 0);
+}
+
+int Read2(int fd, char *buffer, int size) {
+    return syscall(SC_Read2, fd, buffer, size, 0);
+}
+
 int SysJoin(int id) { return kernel->pTab->JoinUpdate(id); }
 
 int SysExit(int id) { return kernel->pTab->ExitUpdate(id); }

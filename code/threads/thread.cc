@@ -49,7 +49,23 @@ Thread::Thread(char *threadName, bool _has_dynamic_name /*=false*/) {
     space = NULL;
     priority= rand()%10;
     printf("priority: %d, name: %s \n", priority, name);
+    for (int i = 0; i < MAX_FD; i++) {
+    fdTable[i].type = FD_NONE;
+    fdTable[i].pipe = NULL;
 }
+}
+
+int AllocateFD(Thread *t, Pipe *p, FDType type) {
+    for (int i = 2; i < MAX_FD; i++) {
+        if (t->fdTable[i].type == FD_NONE) {
+            t->fdTable[i].type = type;
+            t->fdTable[i].pipe = p;
+            return i;
+        }
+    }
+    return -1;
+}
+
 
 //----------------------------------------------------------------------
 // Thread::~Thread

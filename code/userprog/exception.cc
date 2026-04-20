@@ -25,6 +25,7 @@
 #include "main.h"
 #include "syscall.h"
 #include "ksyscall.h"
+#include "pipe.h"
 //----------------------------------------------------------------------
 // ExceptionHandler
 // 	Entry point into the Nachos kernel.  Called when a user program
@@ -503,7 +504,72 @@ void ExceptionHandler(ExceptionType which) {
                 case SC_ThreadExit:
                 case SC_ThreadJoin:
                     return handle_not_implemented_SC(type);
+		case SC_Pipe: {
+    int rPtr = machine->ReadRegister(4);
+    int wPtr = machine->ReadRegister(5);
 
+    Pipe *p = new Pipe();
+
+    int rfd = AllocateFD(currentThread, p, FD_PIPE_READ);
+    int wfd = AllocateFD(currentThread, p, FD_PIPE_WRITE);
+
+    if (rfd < 0 || wfd < 0) {
+        machine->WriteRegister(2, -1);
+        break;
+    }
+
+    machine->WriteMem(rPtr, 4, rfd);
+    machine->WriteMem(wPtr, 4, wfd);
+
+    machine->WriteRegister(2, 0);
+    break;
+}
+case SC_Write2: {
+    int fd = machine->ReadRegister(4);
+    int buf = machine->ReadRegister(5);
+    int size = machine->ReadRegister(6);
+
+    if (currentThread->fdTable[fd].type != FD_PIPE_WRITE) {
+        machine->WriteRegister(2, -1);
+        break;
+    }
+
+    char *kbuf = new char[size];
+
+    for (int i = 0; i < size; i++) {
+        int ch;
+        machine->ReadMem(buf + i, 1, &ch);
+        kbuf[i] = (char)ch;
+    }
+
+    int ret = currentThread->fdTable[fd].pipe->Write(kbuf, size);
+
+    delete[] kbuf;
+    machine->WriteRegister(2, ret);
+    break;
+}
+case SC_Read2: {
+    int fd = machine->ReadRegister(4);
+    int buf = machine->ReadRegister(5);
+    int size = machine->ReadRegister(6);
+
+    if (currentThread->fdTable[fd].type != FD_PIPE_READ) {
+        machine->WriteRegister(2, -1);
+        break;
+    }
+
+    char *kbuf = new char[size];
+
+    int ret = currentThread->fdTable[fd].pipe->Read(kbuf, size);
+
+    for (int i = 0; i < ret; i++) {
+        machine->WriteMem(buf + i, 1, kbuf[i]);
+    }
+
+    delete[] kbuf;
+    machine->WriteRegister(2, ret);
+    break;
+}
                 default:
                     cerr << "Unexpected system call " << type << "\n";
                     break;

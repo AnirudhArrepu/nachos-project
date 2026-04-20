@@ -1,0 +1,864 @@
+diff --git a/code/build.linux/Makefile b/code/build.linux/Makefile
+index 3def870..e339d8c 100644
+--- a/code/build.linux/Makefile
++++ b/code/build.linux/Makefile
+@@ -293,13 +293,15 @@ THREAD_O = alarm.o kernel.o main.o scheduler.o synch.o thread.o ptable.o pcb.o s
+ USERPROG_H = ../userprog/addrspace.h\
+        ../userprog/syscall.h\
+        ../userprog/synchconsole.h\
+-       ../userprog/noff.h
++       ../userprog/noff.h\
++        ../userprog/pipedescriptor.h
+
+ USERPROG_C = ../userprog/addrspace.cc\
+        ../userprog/exception.cc\
+-       ../userprog/synchconsole.cc
++       ../userprog/synchconsole.cc\
++       ../userprog/pipedescriptor.cc
+
+-USERPROG_O = addrspace.o exception.o synchconsole.o
++USERPROG_O = addrspace.o exception.o synchconsole.o pipedescriptor.o
+
+ FILESYS_H =../filesys/directory.h \
+        ../filesys/filehdr.h\
+diff --git a/code/build.linux/Makefile.dep b/code/build.linux/Makefile.dep
+index 06caf7a..18e46be 100644
+--- a/code/build.linux/Makefile.dep
++++ b/code/build.linux/Makefile.dep
+@@ -4189,7 +4189,8 @@ exception.o: ../userprog/exception.cc /usr/include/stdc-predef.h \
+  /usr/include/c++/13/limits /usr/include/c++/13/cstdint \
+  /usr/lib/gcc/x86_64-linux-gnu/13/include/stdint.h /usr/include/stdint.h \
+  /usr/include/x86_64-linux-gnu/bits/stdint-uintn.h \
+- /usr/include/x86_64-linux-gnu/bits/stdint-least.h
++ /usr/include/x86_64-linux-gnu/bits/stdint-least.h \
++ ../userprog/pipedescriptor.h
+ synchconsole.o: ../userprog/synchconsole.cc /usr/include/stdc-predef.h \
+  ../lib/copyright.h ../userprog/synchconsole.h ../lib/utility.h \
+  ../machine/callback.h ../machine/console.h ../threads/synch.h \
+@@ -4351,6 +4352,21 @@ synchconsole.o: ../userprog/synchconsole.cc /usr/include/stdc-predef.h \
+  ../threads/alarm.h ../machine/timer.h ../lib/bitmap.h \
+  ../threads/stable.h ../threads/sem.h ../threads/ptable.h \
+  ../threads/pcb.h
++pipedescriptor.o: ../userprog/pipedescriptor.cc \
++ /usr/include/stdc-predef.h ../userprog/pipedescriptor.h \
++ /usr/include/c++/13/cstddef \
++ /usr/include/x86_64-linux-gnu/c++/13/bits/c++config.h \
++ /usr/include/x86_64-linux-gnu/c++/13/bits/os_defines.h \
++ /usr/include/features.h /usr/include/features-time64.h \
++ /usr/include/x86_64-linux-gnu/bits/wordsize.h \
++ /usr/include/x86_64-linux-gnu/bits/timesize.h \
++ /usr/include/x86_64-linux-gnu/sys/cdefs.h \
++ /usr/include/x86_64-linux-gnu/bits/long-double.h \
++ /usr/include/x86_64-linux-gnu/gnu/stubs.h \
++ /usr/include/x86_64-linux-gnu/gnu/stubs-64.h \
++ /usr/include/x86_64-linux-gnu/c++/13/bits/cpu_defines.h \
++ /usr/include/c++/13/pstl/pstl_config.h \
++ /usr/lib/gcc/x86_64-linux-gnu/13/include/stddef.h
+ directory.o: ../filesys/directory.cc /usr/include/stdc-predef.h \
+  ../lib/copyright.h ../lib/utility.h ../filesys/filehdr.h \
+  ../machine/disk.h ../machine/callback.h ../filesys/pbitmap.h \
+diff --git a/code/test/Makefile b/code/test/Makefile
+index f1ecd02..c3daee4 100644
+--- a/code/test/Makefile
++++ b/code/test/Makefile
+@@ -112,7 +112,7 @@ ifeq ($(hosttype),unknown)
+ PROGRAMS = unknownhost
+ else
+ # change this if you create a new test program!
+-PROGRAMS = sleep mul abs add halt shell matmult sort segments test_syscall num_io char_io random str_io ascii bubblesort help create_file open_file readwrite exec test_sem sinhvien voinuoc main
++PROGRAMS = pipe writer upper sleep mul abs add halt shell matmult sort segments test_syscall num_io char_io random str_io ascii bubblesort help create_file open_file readwrite exec test_sem sinhvien voinuoc main
+ endif
+
+ all: $(PROGRAMS)
+@@ -148,6 +148,26 @@ abs: abs.o start.o
+        $(LD) $(LDFLAGS) start.o abs.o -o abs.coff
+        $(COFF2NOFF) abs.coff abs
+
++pipe.o: pipe.c
++       $(CC) $(CFLAGS) -c pipe.c
++
++pipe: pipe.o start.o
++       $(LD) $(LDFLAGS) start.o pipe.o -o pipe.coff
++       $(COFF2NOFF) pipe.coff pipe
++
++writer.o: writer.c
++       $(CC) $(CFLAGS) -c writer.c
++
++writer: writer.o start.o
++       $(LD) $(LDFLAGS) start.o writer.o -o writer.coff
++       $(COFF2NOFF) writer.coff writer
++
++upper.o: upper.c
++       $(CC) $(CFLAGS) -c upper.c
++
++upper: upper.o start.o
++       $(LD) $(LDFLAGS) start.o upper.o -o upper.coff
++       $(COFF2NOFF) upper.coff upper
+
+ sleep.o: sleep.c
+        $(CC) $(CFLAGS) -c sleep.c
+diff --git a/code/test/pipe.c b/code/test/pipe.c
+new file mode 100644
+index 0000000..0cbf4d0
+--- /dev/null
++++ b/code/test/pipe.c
+@@ -0,0 +1,18 @@
++#include "syscall.h"
++
++int main()
++{
++    int r, w;
++    int p1;
++    int p2;
++
++    Pipe(&r, &w);
++
++    p1 = ExecPipe("../test/writer", r, w);
++    Join(p1);
++
++    p2 = ExecPipe("../test/upper", r, w);
++    Join(p2);
++
++    Exit(0);
++}
+diff --git a/code/test/start.S b/code/test/start.S
+index 202ebfc..aa04781 100644
+--- a/code/test/start.S
++++ b/code/test/start.S
+@@ -82,11 +82,28 @@ Sleep2:
+        syscall
+        j       $31
+        .end Sleep2
++
++        .globl Pipe
++        .ent Pipe
++
++Pipe:
++        addiu $2,$0,SC_Pipe
++        syscall
++        j      $31
++        .end Pipe
++
++        .globl ExecPipe
++        .ent ExecPipe
++
++ExecPipe:
++        addiu $2,$0,SC_ExecPipe
++        syscall
++        j      $31
++        .end ExecPipe
+
+        .globl Exit
+        .ent    Exit
+
+-
+ Exit:
+        addiu $2,$0,SC_Exit
+        syscall
+@@ -127,6 +144,22 @@ Join:
+        j       $31
+        .end Join
+
++       .globl ReadPipe
++        .ent    ReadPipe
++ReadPipe:
++        addiu $2,$0,SC_ReadPipe
++        syscall
++        j       $31
++       .end ReadPipe
++
++       .globl WritePipe
++        .ent    WritePipe
++WritePipe:
++        addiu $2,$0,SC_WritePipe
++        syscall
++        j      $31
++        .end WritePipe
++
+        .globl Create
+        .ent    Create
+ Create:
+diff --git a/code/test/upper.c b/code/test/upper.c
+new file mode 100644
+index 0000000..0447f17
+--- /dev/null
++++ b/code/test/upper.c
+@@ -0,0 +1,28 @@
++#include "syscall.h"
++
++#define ConsoleOutput 1
++
++int main()
++{
++    char buf[100];
++    int i,n;
++
++    //n = ReadPipe(buf,100);
++
++    /* read length first */
++    ReadPipe((char*)&n, sizeof(int));
++
++    /* then read exactly n bytes */
++    ReadPipe(buf, n);
++
++    for(i=0;i<n;i++)
++    {
++        if(buf[i] >= 'a' && buf[i] <= 'z')
++            buf[i] = buf[i] - 32;
++    }
++
++    Write(buf,n,ConsoleOutput);
++    PrintString("\n");
++
++    Exit(0);
++}
+diff --git a/code/test/writer.c b/code/test/writer.c
+new file mode 100644
+index 0000000..161e974
+--- /dev/null
++++ b/code/test/writer.c
+@@ -0,0 +1,25 @@
++#include "syscall.h"
++
++#define ConsoleInput 0
++#define ConsoleOutput 1
++
++int main()
++{
++    char msg[100];
++    int n;
++    int len;
++
++    Write("Enter length of message: ",25,ConsoleOutput);
++    len = ReadNum();
++
++    Write("Enter message: ",15,ConsoleOutput);
++
++    n = Read(msg,len,ConsoleInput);
++
++    /* send length first */
++    WritePipe((char*)&len, sizeof(int));
++
++    WritePipe(msg,n);   // send actual bytes
++
++    Exit(0);
++}
+diff --git a/code/threads/pcb.cc b/code/threads/pcb.cc
+index 8b96e51..32db874 100644
+--- a/code/threads/pcb.cc
++++ b/code/threads/pcb.cc
+@@ -108,7 +108,36 @@ int PCB::Exec2(char* filename, int id, int priority) {
+     return id;
+ }
+
++// added for assignment-4 pipe function
++int PCB::ExecPipe(char* filename, int id, int rfd, int wfd)
++{
+
++    multex->P();
++
++    this->thread = new Thread(filename,true);
++
++    if(this->thread == NULL)
++    {
++        printf("\nPCB::ExecPipe: Not enough memory!\n");
++        multex->V();
++        return -1;
++    }
++
++    this->thread->processID = id;
++    this->thread->priority  = id;
++
++    this->parentID = kernel->currentThread->processID;
++
++    // pass pipe descriptors to child thread
++    this->thread->pipeReadFD  = rfd;
++    this->thread->pipeWriteFD = wfd;
++
++    this->thread->Fork(StartProcess_2,&this->thread->processID);
++
++    multex->V();
++
++    return id;
++}
+
+
+
+diff --git a/code/threads/pcb.h b/code/threads/pcb.h
+index b6990db..5ed5048 100644
+--- a/code/threads/pcb.h
++++ b/code/threads/pcb.h
+@@ -16,12 +16,16 @@ class PCB {
+    public:
+     int parentID;
+     int processID;
++    //added for assignment-4 pipe function
++    int pipeReadFD;
++    int pipeWriteFD;
+     PCB();
+     PCB(int id);
+     ~PCB();
+
+     int Exec(char *filename, int pid);
+     int Exec2(char* filename, int pid, int priority);
++    int ExecPipe(char* filename, int id, int rfd, int wfd);
+     int GetID();
+     int GetNumWait();
+
+diff --git a/code/threads/ptable.cc b/code/threads/ptable.cc
+index 4f649d0..ffa05dc 100644
+--- a/code/threads/ptable.cc
++++ b/code/threads/ptable.cc
+@@ -116,6 +116,43 @@ int PTable::ExecUpdate2(char* name, int priority) {
+     return pid;
+ }
+
++//added for assignment-4 pipe function
++int PTable::ExecUpdatePipe(char* name, int rfd, int wfd) {
++
++    bmsem->P();
++
++    if (name == NULL) {
++        DEBUG(dbgSys,"\nPTable::ExecPipe: name NULL");
++        bmsem->V();
++        return -1;
++    }
++
++    int index = this->GetFreeSlot();
++
++    if (index < 0) {
++        DEBUG(dbgSys,"\nPTable::ExecPipe: no free slot");
++        bmsem->V();
++        return -1;
++    }
++
++    pcb[index] = new PCB(index);
++
++    pcb[index]->SetFileName(name);
++
++    kernel->fileSystem->Renew(index);
++
++    pcb[index]->parentID = kernel->currentThread->processID;
++
++    // store pipe descriptors
++    //pcb[index]->pipeReadFD  = rfd;
++    //pcb[index]->pipeWriteFD = wfd;
++
++    int pid = pcb[index]->ExecPipe(name,index,rfd,wfd);
++
++    bmsem->V();
++
++    return pid;
++}
+
+
+ int PTable::ExitUpdate(int exitcode) {
+diff --git a/code/threads/ptable.h b/code/threads/ptable.h
+index b859f24..da29768 100644
+--- a/code/threads/ptable.h
++++ b/code/threads/ptable.h
+@@ -18,6 +18,7 @@ class PTable {
+     ~PTable();
+     int ExecUpdate(char* name);
+     int ExecUpdate2(char* name, int priority);
++    int ExecUpdatePipe(char* name, int rfd, int wfd);
+     int ExitUpdate(int ec);
+     int JoinUpdate(int id);
+     int GetFreeSlot();
+diff --git a/code/threads/thread.h b/code/threads/thread.h
+index 604f74e..454c3e7 100644
+--- a/code/threads/thread.h
++++ b/code/threads/thread.h
+@@ -91,6 +91,10 @@ class Thread {
+     int processID;
+     int parrentID;
+     int exitStatus;
++    //added for assignment-4 pipe function
++    int pipeReadFD;
++    int pipeWriteFD;
++
+     void FreeSpace() {
+         if (space != 0) delete space;
+     }
+diff --git a/code/userprog/exception.cc b/code/userprog/exception.cc
+index 2895a8a..737181f 100644
+--- a/code/userprog/exception.cc
++++ b/code/userprog/exception.cc
+@@ -25,6 +25,7 @@
+ #include "main.h"
+ #include "syscall.h"
+ #include "ksyscall.h"
++#include "pipedescriptor.h" // added for assignment-4 pipe function
+ //----------------------------------------------------------------------
+ // ExceptionHandler
+ //     Entry point into the Nachos kernel.  Called when a user program
+@@ -186,6 +187,23 @@ void handle_SC_Add() {
+     return move_program_counter();
+ }
+
++void handle_SC_Pipe() {
++    int readPtr = kernel->machine->ReadRegister(4);
++    int writePtr = kernel->machine->ReadRegister(5);
++
++    int rfd, wfd;
++
++    int result = SysPipe(&rfd, &wfd);
++
++    kernel->machine->WriteMem(readPtr,4,rfd);
++    kernel->machine->WriteMem(writePtr,4,wfd);
++
++    kernel->machine->WriteRegister(2,result);
++
++    move_program_counter();
++    return;
++}
++
+ void handle_SC_ReadNum() {
+     int result = SysReadNum();
+     kernel->machine->WriteRegister(2, result);
+@@ -303,6 +321,42 @@ void handle_SC_Write() {
+     return move_program_counter();
+ }
+
++//added for assignment-4 pipe function
++void handle_SC_WritePipe()
++{
++    int addr = kernel->machine->ReadRegister(4);
++    int size = kernel->machine->ReadRegister(5);
++
++    char *buffer = stringUser2System(addr,size);
++
++    int result = SysWritePipe(buffer,size);
++
++    kernel->machine->WriteRegister(2,result);
++
++    delete[] buffer;
++
++    move_program_counter();
++}
++
++void handle_SC_ReadPipe()
++{
++    int addr = kernel->machine->ReadRegister(4);
++    int size = kernel->machine->ReadRegister(5);
++
++    char *buffer = new char[size];
++
++    int result = SysReadPipe(buffer,size);
++
++    StringSys2User(buffer,addr,size);
++
++    kernel->machine->WriteRegister(2,result);
++
++    delete[] buffer;
++
++    move_program_counter();
++}
++
++
+ /**
+  * Handle SC_Seek
+  * This method will seek the file to the given position.
+@@ -369,6 +423,34 @@ void handle_SC_Exec2() {
+     return move_program_counter();
+ }
+
++void handle_SC_ExecPipe() {
++    int virtAddr;
++    int rfd;
++    int wfd;
++
++    virtAddr = kernel->machine->ReadRegister(4);
++
++    rfd = kernel->machine->ReadRegister(5);
++
++    wfd = kernel->machine->ReadRegister(6);
++
++    char* name;
++    name = stringUser2System(virtAddr);
++
++    if (name == NULL) {
++        DEBUG(dbgSys,"\nExecPipe: Not enough memory");
++        kernel->machine->WriteRegister(2,-1);
++        return move_program_counter();
++    }
++
++    int pid = SysExecPipe(name,rfd,wfd);
++
++    kernel->machine->WriteRegister(2,pid);
++
++    return move_program_counter();
++
++}
++
+ //added for assignment-3, custom sleep function
+ void handle_SC_Sleep2(){
+        int seconds = kernel->machine->ReadRegister(4);
+@@ -541,6 +623,14 @@ void ExceptionHandler(ExceptionType which) {
+                    return handle_SC_Exec2();
+                case SC_Sleep2:
+                    return handle_SC_Sleep2();
++               case SC_Pipe:
++                   return handle_SC_Pipe();
++               case SC_ExecPipe:
++                   return handle_SC_ExecPipe();
++               case SC_ReadPipe:
++                   return handle_SC_ReadPipe();
++               case SC_WritePipe:
++                   return handle_SC_WritePipe();
+                 /**
+                  * Handle all not implemented syscalls
+                  * If you want to write a new handler for syscall:
+diff --git a/code/userprog/ksyscall.h b/code/userprog/ksyscall.h
+index ec37661..3a0fae8 100644
+--- a/code/userprog/ksyscall.h
++++ b/code/userprog/ksyscall.h
+@@ -17,6 +17,7 @@
+ #include <stdlib.h>
+ #include <limits>
+ #include <cstdint>
++#include "pipedescriptor.h"
+
+ void SysHalt() { kernel->interrupt->Halt(); }
+
+@@ -174,7 +175,61 @@ int SysOpen(char* fileName, int type) {
+
+ int SysClose(int id) { return kernel->fileSystem->Close(id); }
+
++//added for assignment-4 pipe function
++int SysWritePipe(char *buffer,int size)
++{
++    int fd = kernel->currentThread->pipeWriteFD;
++
++    //printf("SysWritePipe fd = %d", fd);
++
++    PipeBuffer *pipe = pipeTable[fd]->pipe;
++
++    int count = 0;
++
++    while(count < size && pipe->size < PIPE_BUFFER_SIZE)
++    {
++        pipe->buffer[pipe->writePos] = buffer[count];
++
++        pipe->writePos = (pipe->writePos + 1) % PIPE_BUFFER_SIZE;
++        pipe->size++;
++
++        count++;
++    }
++
++    return count;
++}
++
++int SysReadPipe(char *buffer,int size)
++{
++    int fd = kernel->currentThread->pipeReadFD;
++
++    //printf("SysReadPipe fd = %d", fd);
++
++    PipeBuffer *pipe = pipeTable[fd]->pipe;
++
++    int count = 0;
++
++    while(count < size && pipe->size > 0)
++    {
++        buffer[count] = pipe->buffer[pipe->readPos];
++
++        pipe->readPos = (pipe->readPos + 1) % PIPE_BUFFER_SIZE;
++        pipe->size--;
++
++        count++;
++    }
++
++    return count;
++}
++
+ int SysRead(char* buffer, int charCount, int fileId) {
++   /* if(fileId < MAX_PIPE_DESCRIPTORS && pipeTable[fileId] != NULL)
++    {
++        if(pipeTable[fileId]->type == DESC_PIPE)
++        {
++            return SysPipeRead((int)buffer,charCount,fileId);
++        }
++    }*/
+     if (fileId == 0) {
+         return kernel->synchConsoleIn->GetString(buffer, charCount);
+     }
+@@ -182,12 +237,86 @@ int SysRead(char* buffer, int charCount, int fileId) {
+ }
+
+ int SysWrite(char* buffer, int charCount, int fileId) {
++    /*if(fileId < MAX_PIPE_DESCRIPTORS && pipeTable[fileId] != NULL)
++    {
++        if(pipeTable[fileId]->type == DESC_PIPE)
++        {
++            return SysPipeWrite((int)buffer,charCount,fileId);
++        }
++    }*/
+     if (fileId == 1) {
+         return kernel->synchConsoleOut->PutString(buffer, charCount);
+     }
+     return kernel->fileSystem->Write(buffer, charCount, fileId);
+ }
+
++
++/*
++int SysRead(char* buffer, int charCount, int fileId)
++{
++    if(fileId == 0) // ConsoleInput
++    {
++        return kernel->synchConsoleIn->GetString(buffer,charCount);
++    }
++
++    if(fileId < MAX_PIPE_DESCRIPTORS && pipeTable[fileId] != NULL)
++    {
++        if(pipeTable[fileId]->type == DESC_PIPE)
++        {
++            PipeBuffer *pipe = pipeTable[fileId]->pipe;
++
++            int count = 0;
++
++            while(count < charCount && pipe->size > 0)
++            {
++                buffer[count] = pipe->buffer[pipe->readPos];
++
++                pipe->readPos = (pipe->readPos + 1) % PIPE_BUFFER_SIZE;
++                pipe->size--;
++
++                count++;
++            }
++
++            return count;
++        }
++    }
++
++    return kernel->fileSystem->Read(buffer, charCount, fileId);
++}
++
++int SysWrite(char* buffer, int charCount, int fileId) {
++
++    if(fileId < MAX_PIPE_DESCRIPTORS && pipeTable[fileId] != NULL)
++    {
++        if(pipeTable[fileId]->type == DESC_PIPE)
++        {
++            PipeBuffer *pipe = pipeTable[fileId]->pipe;
++
++            int count = 0;
++
++            while(count < charCount && pipe->size < PIPE_BUFFER_SIZE)
++            {
++                pipe->buffer[pipe->writePos] = buffer[count];
++
++                pipe->writePos = (pipe->writePos + 1) % PIPE_BUFFER_SIZE;
++                pipe->size++;
++
++                count++;
++            }
++
++            return count;
++        }
++    }
++
++    if(fileId == 1)
++    {
++        return kernel->synchConsoleOut->PutString(buffer, charCount);
++    }
++
++    return kernel->fileSystem->Write(buffer, charCount, fileId);
++}
++*/
++
+ int SysSeek(int seekPos, int fileId) {
+     if (fileId <= 1) {
+         DEBUG(dbgSys, "\nCan't seek in console");
+@@ -225,7 +354,43 @@ int SysExec2(char* name, int priority) {
+     return kernel->pTab->ExecUpdate2(name, priority);
+ }
+
++// included for assignment-4 pipe function
++int SysExecPipe(char* name, int rfd, int wfd)
++{
++    OpenFile* oFile = kernel->fileSystem->Open(name);
++
++    if(oFile == NULL)
++    {
++        DEBUG(dbgSys,"\nExecPipe: Cannot open file");
++        return -1;
++    }
++
++    delete oFile;
++    //Return child process id
++    return kernel->pTab->ExecUpdatePipe(name,rfd,wfd);
++}
++/*
++int SysPipe(int *rfd, int *wfd){
++    PipeBuffer *buf = new PipeBuffer;
++
++    buf->readPos = 0;
++    buf->writePos = 0;
++    buf->size = 0;
++
++    pipeTable[0] = new PipeDescriptor;
++    pipeTable[0]->pipe = buf;
++    pipeTable[0]->type = 0;   // read
+
++    pipeTable[1] = new PipeDescriptor;
++    pipeTable[1]->pipe = buf;
++    pipeTable[1]->type = 1;   // write
++
++    kernel->machine->WriteMem((int)rfd,4,0);
++    kernel->machine->WriteMem((int)wfd,4,1);
++
++    return 0;
++}
++*/
+ int SysJoin(int id) { return kernel->pTab->JoinUpdate(id); }
+
+ int SysExit(int id) { return kernel->pTab->ExitUpdate(id); }
+diff --git a/code/userprog/pipedescriptor.cc b/code/userprog/pipedescriptor.cc
+new file mode 100644
+index 0000000..3c420eb
+--- /dev/null
++++ b/code/userprog/pipedescriptor.cc
+@@ -0,0 +1,49 @@
++#include "pipedescriptor.h"
++#include <cstddef>
++
++PipeDescriptor* pipeTable[MAX_PIPE_DESCRIPTORS] = {NULL};
++//PipeDescriptor *pipeTable = NULL;
++
++int SysPipe(int *readfd, int *writefd)
++{
++    PipeBuffer *pipe = new PipeBuffer();
++    pipe->size = 0;
++    pipe->readPos = 0;
++    pipe->writePos = 0;
++
++    int r = -1;
++    int w = -1;
++
++    for(int i = 0; i < MAX_PIPE_DESCRIPTORS; i++)
++    {
++        if(pipeTable[i] == NULL)
++        {
++            if(r == -1)
++                r = i;
++            else
++            {
++                w = i;
++                break;
++            }
++        }
++    }
++
++    if(r == -1 || w == -1)
++        return -1;
++
++    pipeTable[r] = new PipeDescriptor;
++    pipeTable[w] = new PipeDescriptor;
++
++    pipeTable[r]->type = DESC_PIPE;
++    pipeTable[r]->role = PIPE_READ;
++    pipeTable[r]->pipe = pipe;
++
++    pipeTable[w]->type = DESC_PIPE;
++    pipeTable[w]->role = PIPE_WRITE;
++    pipeTable[w]->pipe = pipe;
++
++    *readfd = r;
++    *writefd = w;
++
++    return 0;
++}
+diff --git a/code/userprog/pipedescriptor.h b/code/userprog/pipedescriptor.h
+new file mode 100644
+index 0000000..a694206
+--- /dev/null
++++ b/code/userprog/pipedescriptor.h
+@@ -0,0 +1,40 @@
++#ifndef PIPEDESCRIPTOR_H
++#define PIPEDESCRIPTOR_H
++
++#define MAX_PIPE_DESCRIPTORS 64
++#define PIPE_BUFFER_SIZE 256
++
++enum DescriptorType {
++    DESC_FILE,
++    DESC_PIPE
++};
++
++enum PipeRole {
++    PIPE_READ,
++    PIPE_WRITE
++};
++
++struct PipeBuffer {
++    char buffer[PIPE_BUFFER_SIZE];
++    int readPos;
++    int writePos;
++    int size;
++
++    PipeBuffer() {
++        readPos = 0;
++        writePos = 0;
++        size = 0;
++    }
++};
++
++struct PipeDescriptor {
++    DescriptorType type;
++    PipeRole role;
++    PipeBuffer *pipe;
++};
++
++extern PipeDescriptor* pipeTable[MAX_PIPE_DESCRIPTORS];
++
++int SysPipe(int *readfd, int *writefd);
++
++#endif
+diff --git a/code/userprog/syscall.h b/code/userprog/syscall.h
+index 80099b6..3360213 100644
+--- a/code/userprog/syscall.h
++++ b/code/userprog/syscall.h
+@@ -55,6 +55,11 @@
+ #define SC_Exec2 57
+ // inserted for assignment-3, custom sleep function
+ #define SC_Sleep2 58
++// inserted for assignment-4, pipe function
++#define SC_Pipe 59
++#define SC_ExecPipe 60
++#define SC_ReadPipe 61
++#define SC_WritePipe 62
+
+ #ifndef IN_ASM
+
+@@ -84,6 +89,9 @@ int Mul(int op1, int op2);
+ //custom sleep function added for assignment-3
+ void Sleep2(int seconds);
+
++// added for assignment-4 pipe function
++int Pipe(int* readfd, int* writefd);
++
+ int ReadNum();
+
+ void PrintNum(int num);
+@@ -122,6 +130,9 @@ SpaceId Exec(char *exec_name);
+ // Inserted to give user-defined priorities to threads
+ SpaceId Exec2(char *exec_name, int priority);
+
++// Inserted for assignment-4 pipe function
++SpaceId ExecPipe(char* name, int readfd, int writefd);
++
+ SpaceId ExecV(int argc, char *argv[]);
+
+ /* Only return once the user program "id" has finished.
+@@ -184,6 +195,11 @@ int Read(char *buffer, int size, OpenFileId id);
+ /* Set the seek position of the open file "id"
+  * to the byte "position".
+  */
++
++// added for assignment-4 pipe function
++int ReadPipe(char *buffer, int size);
++int WritePipe(char *buffer, int size);
++
+ int Seek(int position, OpenFileId id);
+
