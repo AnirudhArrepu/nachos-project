@@ -76,7 +76,9 @@ void malloc_init()
     unsigned int  buf_vaddr = space->mallocbuffstart;
     blk_metadata *initial;
 
-    ASSERT(space->pageTable[buf_vaddr / PageSize].valid);
+    if(!space->pageTable[buf_vaddr / PageSize].valid){
+	kernel->machine->WriteRegister(BadVAddrReg, buf_vaddr/PageSize);
+    }
 
     initial          = meta(space, buf_vaddr);
     initial->p_blk   = 0;
