@@ -25,6 +25,7 @@
 #include "main.h"
 #include "syscall.h"
 #include "ksyscall.h"
+#include "malloc.h"
 //----------------------------------------------------------------------
 // ExceptionHandler
 // 	Entry point into the Nachos kernel.  Called when a user program
@@ -630,7 +631,18 @@ void ExceptionHandler(ExceptionType which) {
                     return handle_SC_Signal();
                 case SC_GetPid:
                     return handle_SC_GetPid();
-                /**
+		case SC_Malloc:
+		   {
+			int bytes = kernel->machine->ReadRegister(4);
+			void* ptr = my_malloc((unsigned int)bytes);
+			kernel->machine->WriteRegister(2, (int)(unsigned int)ptr);
+		    return move_program_counter(); }
+		case SC_Free:
+		   {
+			unsigned int vaddr = (unsigned int)kernel->machine->ReadRegister(4);
+			my_free((void*)vaddr);
+		    return move_program_counter(); }
+    		    /**
                  * Handle all not implemented syscalls
                  * If you want to write a new handler for syscall:
                  * - Remove it from this list below

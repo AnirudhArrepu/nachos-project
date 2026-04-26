@@ -102,7 +102,7 @@ AddrSpace::~AddrSpace() {
 //
 //	"fileName" is the file containing the object code to load into memory
 //----------------------------------------------------------------------
-
+#define MALLOC_BUFFER (12*PageSize);
 AddrSpace::AddrSpace(char *fileName) {
     executable = kernel->fileSystem->Open(fileName);
     //NoffHeader noffH;
@@ -129,6 +129,7 @@ AddrSpace::AddrSpace(char *fileName) {
     size = this->noffH.code.size + this->noffH.initData.size + this->noffH.uninitData.size +
            UserStackSize;  // we need to increase the size
                            // to leave room for the stack
+    size = size+MALLOC_BUFFER;
     numPages = divRoundUp(size, PageSize);
     size = numPages * PageSize;
 
@@ -137,6 +138,8 @@ AddrSpace::AddrSpace(char *fileName) {
                                        // at least until we have
                                        // virtual memory
 
+    mallocbuffstart = this->noffH.code.size + this->noffH.initData.size + this->noffH.uninitData.size;
+    mallocbuffend = mallocbuffstart + MALLOC_BUFFER;
     // Check the available memory enough to load new process
     // debug
     if (numPages > kernel->gPhysPageBitMap->NumClear()) {

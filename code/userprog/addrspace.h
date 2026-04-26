@@ -21,6 +21,8 @@
 
 class AddrSpace {
    public:
+    unsigned int mallocbuffstart;
+    unsigned int mallocbuffend;
     AddrSpace();                // Create an address space.
     AddrSpace(char *fileName);  // Load a program into addr space from
                                 // a file

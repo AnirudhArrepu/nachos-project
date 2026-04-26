@@ -18,7 +18,7 @@
 #include "alarm.h"
 #include "filesys.h"
 #include "machine.h"
-
+//forward init
 class PostOfficeInput;
 class PostOfficeOutput;
 class SynchConsoleInput;

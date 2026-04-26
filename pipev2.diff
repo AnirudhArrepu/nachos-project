@@ -1,0 +1,481 @@
+commit 7d166594b7e66d733aeb01e6a26f16cfda8a33d5
+Author: anirudh <cs23b008@gmail.com>
+Date:   Mon Apr 20 20:47:39 2026 +0530
+
+    pipe implemented
+
+diff --git a/code/test/shell.c b/code/test/shell.c
+index a1d8011..3e86264 100644
+--- a/code/test/shell.c
++++ b/code/test/shell.c
+@@ -1,30 +1,28 @@
++/* shell.c */
+ #include "syscall.h"
+ 
+-int main() {
+-    SpaceId newProc;
+-    OpenFileId input = _ConsoleInput;
+-    OpenFileId output = _ConsoleOutput;
+-    char prompt[2], ch, buffer[60];
+-    int i;
++int main()
++{
++    int  x, y;       /* x = read fd,  y = write fd */
++    int  rt, rt2;
++    char buf1[] = "Hello World\0";
++    char buf2[20];
+ 
+-    prompt[0] = '-';
+-    prompt[1] = '-';
+-
+-    while (1) {
+-        Write(prompt, 2, output);
+-
+-        i = 0;
+-
+-        do {
+-            Read(&buffer[i], 1, input);
+-
+-        } while (buffer[i++] != '\n');
++    rt = Pipe(&x, &y);
++    if (rt == -1) {
++        Exit(-1);
++    }
+ 
+-        buffer[--i] = '\0';
++    rt2 = Exec("child");   /* path to the child binary */
+ 
+-        if (i > 0) {
+-            newProc = Exec(buffer);
+-            Join(newProc);
+-        }
++    if (rt2 == 0) {
++        /* ---- parent ---- */
++        write2(y, buf1, 10);
++    } else {
++        /* ---- child  ---- */
++        read2(x, buf2, 10);
++        PrintString(buf2);
+     }
++
++    Exit(0);
+ }
+diff --git a/code/threads/pcb.cc b/code/threads/pcb.cc
+index e31a061..ec0de39 100644
+--- a/code/threads/pcb.cc
++++ b/code/threads/pcb.cc
+@@ -1,13 +1,47 @@
+-#include "synch.h"
++#include "copyright.h"
++#include "main.h"       // must be before pcb.h because we use kernel
+ #include "pcb.h"
++#include <string.h>     // for memset and strcpy
++
++// PipeBuffer constructor & destructor
++PipeBuffer::PipeBuffer() {
++    memset(data, 0, sizeof(data));
++    readPos   = 0;
++    writePos  = 0;
++    count     = 0;
++    refCount  = 2;
++    lock      = new Lock("PipeLock");
++    dataAvail = new Semaphore("PipeDataAvail", 0);
++    spaceAvail= new Semaphore("PipeSpaceAvail", PIPE_BUFFER_SIZE);
++}
++
++PipeBuffer::~PipeBuffer() {
++    delete lock;
++    delete dataAvail;
++    delete spaceAvail;
++}
+ 
++// PCB constructor (the one with parameter)
+ PCB::PCB(int id) {
+-    this->processID = kernel->currentThread->processID;
+-    joinsem = new Semaphore("joinsem", 0);
+-    exitsem = new Semaphore("exitsem", 0);
+-    multex = new Semaphore("multex", 1);
++    processID = id;                    // better than kernel->currentThread->processID here
++    parentID  = -1;
++    joinsem   = new Semaphore("joinsem", 0);
++    exitsem   = new Semaphore("exitsem", 0);
++    multex    = new Semaphore("multex", 1);
++
++    // Initialize fd_table
++    for (int i = 0; i < MAX_FD_ENTRY; i++) {
++        fd_table[i].type = FD_EMPTY;
++        fd_table[i].pipe = NULL;
++    }
++
++    thread = NULL;
++    numwait = 0;
++    exitcode = 0;
++    filename[0] = '\0';
+ }
+ 
++// Default constructor (if used somewhere)
+ PCB::~PCB() {
+     delete joinsem;
+     delete exitsem;
+@@ -18,10 +52,41 @@ PCB::~PCB() {
+         thread->Finish();
+         // delete thread;
+     }
++    for (int i = 0; i < MAX_FD_ENTRY; i++) {
++        if (fd_table[i].type != FD_EMPTY)
++            FreeFD(i);
++    }
+ 
+     delete[] filename;
+ }
+ 
++int PCB::AllocFD() {
++    // Start from 3 to skip stdin/stdout/stderr
++    for (int i = 3; i < MAX_FD_ENTRY; i++) {
++        if (fd_table[i].type == FD_EMPTY)
++            return i;
++    }
++    return -1;   // table full
++}
++
++void PCB::FreeFD(int fd) {
++    if (!ValidFD(fd)) return;
++
++    PipeBuffer* pipe = fd_table[fd].pipe;
++    fd_table[fd].type = FD_EMPTY;
++    fd_table[fd].pipe = NULL;
++
++    if (pipe != NULL) {
++        pipe->refCount--;
++        if (pipe->refCount <= 0)
++            delete pipe;   // last reference gone → free the buffer
++    }
++}
++
++bool PCB::ValidFD(int fd) {
++    return (fd >= 0 && fd < MAX_FD_ENTRY && fd_table[fd].type != FD_EMPTY);
++}
++
+ void StartProcess_2(void* pid) {
+     int id;
+     id = *((int*)pid);
+diff --git a/code/threads/pcb.h b/code/threads/pcb.h
+index dcab368..a57f38c 100644
+--- a/code/threads/pcb.h
++++ b/code/threads/pcb.h
+@@ -1,42 +1,76 @@
+ #ifndef PCB_H
+ #define PCB_H
+ 
++#include "synch.h"      // for Semaphore, Lock (forward is not enough anymore)
++
++#define MAX_FD_ENTRY     20
++#define PIPE_BUFFER_SIZE 256
++
++// Entry types
++#define FD_EMPTY     0
++#define FD_PIPE_RD   1
++#define FD_PIPE_WR   2
++
++// One pipe buffer shared between read and write end
++struct PipeBuffer {
++    char        data[PIPE_BUFFER_SIZE];
++    int         readPos;
++    int         writePos;
++    int         count;
++    int         refCount;
++    Lock*       lock;
++    Semaphore*  dataAvail;
++    Semaphore*  spaceAvail;
++
++    PipeBuffer();   // declaration only
++    ~PipeBuffer();
++};
++
++// One slot in file descriptor table
++struct FDEntry {
++    int         type;
++    PipeBuffer* pipe;
++};
++
+ class PCB {
+-   private:
++private:
+     Semaphore *joinsem;
+     Semaphore *exitsem;
+     Semaphore *multex;
+-
+     int exitcode;
+     int numwait;
+-
+     Thread *thread;
+     char filename[128];
+ 
+-   public:
++public:
+     int parentID;
+     int processID;
++
++    // ===== NEW: File Descriptor Table for Pipes =====
++    FDEntry fd_table[MAX_FD_ENTRY];
++
+     PCB();
+     PCB(int id);
+     ~PCB();
+ 
+-    int Exec(char *filename, int pid);
+-    int GetID();
+-    int GetNumWait();
+-
++    int  Exec(char *filename, int pid);
++    int  GetID();
++    int  GetNumWait();
+     void JoinWait();
+     void ExitWait();
+     void JoinRelease();
+     void ExitRelease();
+-
+     void IncNumWait();
+     void DecNumWait();
+-
+     void SetExitCode(int ec);
+-    int GetExitCode();
+-
++    int  GetExitCode();
+     void SetFileName(char *fn);
+-    char *GetFileName();
++    char* GetFileName();
++
++    // ===== NEW: FD management functions =====
++    int  AllocFD();
++    void FreeFD(int fd);
++    bool ValidFD(int fd);
+ };
+ 
+-#endif
++#endif // PCB_H
+diff --git a/code/threads/synch.cc b/code/threads/synch.cc
+index bdbea73..f7575e7 100644
+--- a/code/threads/synch.cc
++++ b/code/threads/synch.cc
+@@ -269,4 +269,9 @@ void Condition::Broadcast(Lock *conditionLock) {
+     while (!waitQueue->IsEmpty()) {
+         Signal(conditionLock);
+     }
++// Add at the bottom of synch.cc
++// Make sure #include "main.h" is at the top of synch.cc
++}
++bool Lock::IsHeldByCurrentThread() {
++    return lockHolder == kernel->currentThread;
+ }
+diff --git a/code/threads/synch.h b/code/threads/synch.h
+index 3aedf18..cb96f17 100644
+--- a/code/threads/synch.h
++++ b/code/threads/synch.h
+@@ -21,7 +21,6 @@
+ #include "thread.h"
+ #include "list.h"
+ #include "main.h"
+-
+ // The following class defines a "semaphore" whose value is a non-negative
+ // integer.  The semaphore has only two operations P() and V():
+ //
+@@ -75,7 +74,7 @@ class Lock {
+     void Acquire();  // these are the only operations on a lock
+     void Release();  // they are both *atomic*
+ 
+-    bool IsHeldByCurrentThread() { return lockHolder == kernel->currentThread; }
++    bool IsHeldByCurrentThread();
+     // return true if the current thread
+     // holds this lock.
+ 
+diff --git a/code/userprog/exception.cc b/code/userprog/exception.cc
+index 62d30e0..3e3cc87 100644
+--- a/code/userprog/exception.cc
++++ b/code/userprog/exception.cc
+@@ -442,7 +442,159 @@ void ExceptionHandler(ExceptionType which) {
+             switch (type) {
+                 case SC_Halt:
+                     return handle_SC_Halt();
+-               	case SC_Sleep:
++               	// ---------------------------------------------------------------
++// SC_Pipe handler
++// Signature: int Pipe(int *readFd, int *writeFd)
++//   ReadRegister(4) = user virtual address of readFd  (int*)
++//   ReadRegister(5) = user virtual address of writeFd (int*)
++// Returns 0 on success, -1 on failure (via Register 2)
++// ---------------------------------------------------------------
++case SC_Pipe: {
++    // Read the two user-space pointer arguments
++    int rdAddr = kernel->machine->ReadRegister(4);
++    int wrAddr = kernel->machine->ReadRegister(5);
++
++    // Allocate two fd slots in the current process's PCB
++    PCB* pcb = kernel->currentThread->pcb;   // adjust to your PCB access pattern
++
++    int rdFd = pcb->AllocFD();
++    if (rdFd == -1) {
++        kernel->machine->WriteRegister(2, -1);
++        return move_program_counter();
++    }
++
++    int wrFd = pcb->AllocFD();
++    if (wrFd == -1) {
++        kernel->machine->WriteRegister(2, -1);
++        return move_program_counter();
++    }
++
++    // Create one shared pipe buffer for both ends
++    PipeBuffer* pipe = new PipeBuffer();
++
++    pcb->fd_table[rdFd].type = FD_PIPE_RD;
++    pcb->fd_table[rdFd].pipe = pipe;
++
++    pcb->fd_table[wrFd].type = FD_PIPE_WR;
++    pcb->fd_table[wrFd].pipe = pipe;
++
++    // Write the fd values back into user space
++    // We use ReadMem / WriteMem because the OS cannot dereference
++    // user virtual addresses directly.
++
++    // Write rdFd → *rdAddr  (4 bytes)
++    // Method A: via ReadMem/WriteMem (word-by-word)
++    kernel->machine->WriteMem(rdAddr, 4, rdFd);
++    kernel->machine->WriteMem(wrAddr, 4, wrFd);
++
++    // (Alternative Method B shown below for reference — using
++    //  StringSys2User the same way your instructor's snippet does)
++    //
++    //   int tmp = rdFd;
++    //   StringSys2User((char*)&tmp, rdAddr, 4);
++    //   tmp = wrFd;
++    //   StringSys2User((char*)&tmp, wrAddr, 4);
++
++    kernel->machine->WriteRegister(2, 0);  // success
++    return move_program_counter();
++}
++
++// ---------------------------------------------------------------
++// SC_Write2 handler
++// Signature: int write2(int fd, char *buf, int nbytes)
++//   ReadRegister(4) = fd
++//   ReadRegister(5) = user virtual address of buf
++//   ReadRegister(6) = number of bytes to write
++// Returns nbytes written, or -1 on error (via Register 2)
++// ---------------------------------------------------------------
++case SC_Write2: {
++    int fd     = kernel->machine->ReadRegister(4);
++    int bufPtr = kernel->machine->ReadRegister(5);
++    int nBytes = kernel->machine->ReadRegister(6);
++
++    PCB* pcb = kernel->currentThread->pcb;
++
++    // Validate fd
++    if (!pcb->ValidFD(fd) || pcb->fd_table[fd].type != FD_PIPE_WR) {
++        kernel->machine->WriteRegister(2, -1);
++        return move_program_counter();
++    }
++
++    // Copy the user buffer into OS (kernel) space
++    // stringUser2System allocates a new char[] and copies nBytes
++    char* osBuf = stringUser2System(bufPtr, nBytes);
++    if (osBuf == NULL) {
++        kernel->machine->WriteRegister(2, -1);
++        return move_program_counter();
++    }
++
++    PipeBuffer* pipe = pcb->fd_table[fd].pipe;
++
++    // Write each byte into the ring buffer, blocking if full
++    for (int i = 0; i < nBytes; i++) {
++        pipe->spaceAvail->P();          // wait for space
++        pipe->lock->Acquire();
++
++        pipe->data[pipe->writePos] = osBuf[i];
++        pipe->writePos = (pipe->writePos + 1) % PIPE_BUFFER_SIZE;
++        pipe->count++;
++
++        pipe->lock->Release();
++        pipe->dataAvail->V();           // signal data available
++    }
++
++    delete[] osBuf;
++    kernel->machine->WriteRegister(2, nBytes);
++    return move_program_counter();
++}
++
++// ---------------------------------------------------------------
++// SC_Read2 handler
++// Signature: int read2(int fd, char *buf, int nbytes)
++//   ReadRegister(4) = fd
++//   ReadRegister(5) = user virtual address of buf
++//   ReadRegister(6) = number of bytes to read
++// Returns nbytes read, or -1 on error (via Register 2)
++// ---------------------------------------------------------------
++case SC_Read2: {
++    int fd     = kernel->machine->ReadRegister(4);
++    int bufPtr = kernel->machine->ReadRegister(5);
++    int nBytes = kernel->machine->ReadRegister(6);
++
++    PCB* pcb = kernel->currentThread->pcb;
++
++    // Validate fd
++    if (!pcb->ValidFD(fd) || pcb->fd_table[fd].type != FD_PIPE_RD) {
++        kernel->machine->WriteRegister(2, -1);
++        return move_program_counter();
++    }
++
++    PipeBuffer* pipe = pcb->fd_table[fd].pipe;
++
++    // Allocate OS buffer, read from pipe ring buffer
++    char* osBuf = new char[nBytes + 1];
++    memset(osBuf, 0, nBytes + 1);
++
++    for (int i = 0; i < nBytes; i++) {
++        pipe->dataAvail->P();           // wait for data
++        pipe->lock->Acquire();
++
++        osBuf[i] = pipe->data[pipe->readPos];
++        pipe->readPos = (pipe->readPos + 1) % PIPE_BUFFER_SIZE;
++        pipe->count--;
++
++        pipe->lock->Release();
++        pipe->spaceAvail->V();          // signal space freed
++    }
++
++    // Copy the OS buffer back to user space
++    StringSys2User(osBuf, bufPtr, nBytes);
++
++    delete[] osBuf;
++    kernel->machine->WriteRegister(2, nBytes);
++    return move_program_counter();
++}
++		case SC_Sleep:
+ 		    return handle_SC_Sleep();
+ 		case SC_Abs:
+ 		    return handle_SC_Abs();
+diff --git a/code/userprog/syscall.h b/code/userprog/syscall.h
+index 8c88add..297e765 100644
+--- a/code/userprog/syscall.h
++++ b/code/userprog/syscall.h
+@@ -50,6 +50,9 @@
+ #define SC_GetPid 54
+ #define SC_Abs 55
+ #define SC_Sleep 56
++#define SC_Pipe    57
++#define SC_Write2  58
++#define SC_Read2   59
+ #ifndef IN_ASM
+ 
+ /* The system call interface.  These are the operations the Nachos
+@@ -69,6 +72,10 @@ void Halt();
+  * Add the two operants and return the result
+  */
+ 
++int  Pipe(int *readFd, int *writeFd);
++int  write2(int fd, char *buf, int nbytes);
++int  read2(int fd, char *buf, int nbytes);
++
+ int Add(int op1, int op2);
+ 
+ int Abs(int op1);

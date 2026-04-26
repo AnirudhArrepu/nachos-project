@@ -117,6 +117,13 @@ endif
 
 all: $(PROGRAMS)
 
+##malloc.o : malloc.c
+##	$(CC) $(CFLAGS) -c malloc.c
+
+##malloc: malloc.o start.o
+##	$(LD) $(LDFLAGS) start.o malloc.o -o malloc.coff
+##	$(COFF2NOFF) malloc.coff malloc
+
 dp.o : dp.c
 	$(CC) $(CFLAGS) -c dp.c
 
