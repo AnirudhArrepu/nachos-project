@@ -155,6 +155,60 @@ void handle_SC_Add() {
     return move_program_counter();
 }
 
+
+static int nextTLBSlot = 0;
+
+static int SelectTLBVictim() {
+    for (int i = 0; i < TLBSize; i++) {
+        if (!kernel->machine->tlb[i].valid) {
+            return i;
+        }
+    }
+
+    int victim = nextTLBSlot;
+    nextTLBSlot = (nextTLBSlot + 1) % TLBSize;
+    return victim;
+}
+
+static void SaveBackTLBEntry(AddrSpace *space, TranslationEntry &entry) {
+    if (!entry.valid || space == NULL) {
+        return;
+    }
+
+    TranslationEntry *pte = space->FindPTE(entry.virtualPage);
+    if (pte != NULL) {
+        pte->use = pte->use || entry.use;
+        pte->dirty = pte->dirty || entry.dirty;
+    }
+}
+
+static bool HandleTLBMiss() {
+#ifndef USE_TLB
+    return false;
+#else
+    AddrSpace *space = kernel->currentThread->space;
+    if (space == NULL) {
+        return false;
+    }
+
+    int badVAddr = kernel->machine->ReadRegister(BadVAddrReg);
+    int vpn = (unsigned int)badVAddr / PageSize;
+
+    TranslationEntry *pte = space->FindPTE(vpn);
+    if (pte == NULL || !pte->valid) {
+        return false;
+    }
+
+    int victim = SelectTLBVictim();
+    SaveBackTLBEntry(space, kernel->machine->tlb[victim]);
+
+    kernel->machine->tlb[victim] = *pte;
+    kernel->machine->tlb[victim].valid = TRUE;
+    return true;
+#endif
+}
+
+
 void handle_SC_Sleep(){
 	int result;
 	result = SysSleep( (int)kernel->machine->ReadRegister(4));
@@ -567,6 +621,8 @@ void ExceptionHandler(ExceptionType which) {
             DEBUG(dbgSys, "Switch to system mode\n");
             break;
         case PageFaultException: {
+	    if( HandleTLBMiss()) return;
+					 
 	    cerr << "page fault exception";
 	    handle_PageFault();
 	    

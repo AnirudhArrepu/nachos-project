@@ -1,8 +1,8 @@
 #include <syscall.h>
 
 int main(){
-	PrintString("before sleeping for 5 \n");
+	PrintNum(-1);
 	// Exec("../test/add");
 	Sleep(500);
-	PrintString("after sleeping");
+	PrintNum(-1);
 }

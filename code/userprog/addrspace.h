@@ -43,6 +43,13 @@ class AddrSpace {
     OpenFile *executable;
     NoffHeader noffH;
 
+   TranslationEntry *GetPageTable() { return pageTable; }
+    TranslationEntry *FindPTE(int vpn);
+    void SaveTLBState();
+    void ClearTLB();
+
+
+
     // void InitRegisters();
     TranslationEntry *pageTable;  // Assume linear page table translation
 //    private:
@@ -53,5 +60,6 @@ class AddrSpace {
     void InitRegisters();  // Initialize user-level CPU registers,
                            // before jumping to user code
 };
+
 
 #endif  // ADDRSPACE_H
