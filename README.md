@@ -1,4 +1,16 @@
-# Nachos-project
+# Lab Progress:
+branch 'master' set up to track 'fork/master'.
+branch 'demandpaging' set up to track 'fork/demandpaging'.
+branch 'malloc' set up to track 'fork/malloc'.
+branch 'pipe' set up to track 'fork/pipe'.
+branch 'pipe2' set up to track 'fork/pipe2'.
+branch 'pipev2' set up to track 'fork/pipev2'.
+branch 'pqscheduler' set up to track 'fork/pqscheduler'.
+branch 'sleepsyscall' set up to track 'fork/sleepsyscall'.
+branch 'sleepv2' set up to track 'fork/sleepv2'.
+branch 'tlb' set up to track 'fork/tlb'.
+
+## Nachos-project
 Not Another Completely Heuristic Operating System
 
 This is our course-work for the OS course in HCMUS.
